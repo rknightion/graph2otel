@@ -7,10 +7,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"golang.org/x/time/rate"
 
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -368,4 +370,96 @@ func TestAdaptiveRateRecoversOnSuccessfulRequestsAndGaugeFollows(t *testing.T) {
 	if last := pts[len(pts)-1].Value; last != got {
 		t.Fatalf("last published gauge %.0f/min != current rate %.0f/min", last, got)
 	}
+}
+
+// Gauge publication can be delayed after the rate is read. A recovery on a
+// second transport sharing that bucket must not leave the older value exported.
+func TestConcurrentRecoveryPublishesLatestEffectiveRate(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const tenant = "tenant-a"
+		const wl = WorkloadIntuneExport
+		l := NewWorkloadLimiter()
+		l.ObserveThrottle(tenant, wl, time.Now()) // 24 -> 12/min
+		// Make each success a recovery step without queuing 50 requests.
+		l.adaptive[limiterKey{tenantID: tenant, workload: wl}].spec.recoverEvery = 1
+
+		rec := telemetrytest.New()
+		admitted := make(chan struct{})
+		firstResponse, secondResponse := make(chan struct{}), make(chan struct{})
+		olderPublishing, resumeOlder := make(chan struct{}), make(chan struct{})
+		newTransport := func(response <-chan struct{}, emitter telemetry.Emitter) *rateLimitTransport {
+			return &rateLimitTransport{
+				next: &statusServer{next: func() int {
+					admitted <- struct{}{}
+					<-response
+					return http.StatusOK
+				}},
+				limiter: l, tenantID: tenant, emitter: emitter,
+			}
+		}
+		first := newTransport(firstResponse, gaugeBarrierEmitter{
+			Emitter: rec.Emitter(),
+			beforeRecord: func() {
+				select {
+				case <-firstResponse:
+					close(olderPublishing)
+					<-resumeOlder
+				default: // Leave the pre-request publication alone.
+				}
+			},
+		})
+		second := newTransport(secondResponse, rec.Emitter())
+
+		done := make(chan error, 2)
+		export := func(rt *rateLimitTransport) {
+			req, err := http.NewRequest(http.MethodPost, exportJobsURL, nil)
+			if err == nil {
+				var resp *http.Response
+				resp, err = rt.RoundTrip(req)
+				if err == nil {
+					err = resp.Body.Close()
+				}
+			}
+			done <- err
+		}
+		go export(first)
+		<-admitted
+		go export(second)
+		<-admitted // Both requests are now in flight under the same rate.
+		close(firstResponse)
+		<-olderPublishing // First success raised the rate to 14; not yet recorded.
+		close(secondResponse)
+		synctest.Wait() // Second success raised it to 16 and attempted publication.
+		close(resumeOlder)
+		for range 2 {
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		got, ok := l.EffectiveRatePerMinute(tenant, wl)
+		if !ok || got < 15.99 || got > 16.01 {
+			t.Fatalf("effective rate = %v/min, adaptive = %t, want 16/min after two recoveries", got, ok)
+		}
+		pts := rec.MetricPoints("graph2otel.throttle.effective_rate_per_minute")
+		if len(pts) != 1 || pts[0].Kind != "gauge" || pts[0].Unit != "{request}/min" ||
+			len(pts[0].Attrs) != 2 || pts[0].Attrs["tenant_id"] != tenant || pts[0].Attrs["workload"] != string(wl) {
+			t.Fatalf("effective-rate points = %+v, want one request/min gauge for the original tenant/workload series", pts)
+		}
+		if last := pts[0].Value; last != got {
+			t.Fatalf("last published gauge %.0f/min != current rate %.0f/min", last, got)
+		}
+	})
+}
+
+type gaugeBarrierEmitter struct {
+	telemetry.Emitter
+	beforeRecord func()
+}
+
+func (e gaugeBarrierEmitter) Gauge(name, unit, desc string, value float64, attrs telemetry.Attrs) {
+	if name == metricThrottleEffectiveRate {
+		e.beforeRecord()
+	}
+	e.Emitter.Gauge(name, unit, desc, value, attrs)
 }

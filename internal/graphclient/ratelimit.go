@@ -85,6 +85,8 @@ type adaptiveState struct {
 	cur          rate.Limit
 	successes    int       // successful requests since the last 429 or recovery step
 	lastDecrease time.Time // 429s from requests issued before this reflect the old rate
+
+	publication chan struct{} // one-slot gate for sampling and recording this bucket's gauge
 }
 
 // limiterKey identifies one token bucket. Every workload is keyed per
@@ -166,6 +168,27 @@ func (l *WorkloadLimiter) EffectiveRatePerMinute(tenantID string, wl Workload) (
 		return 0, false
 	}
 	return float64(st.cur) * 60, true
+}
+
+// publishEffectiveRate samples and records an already-used adaptive bucket's
+// rate in publication order. The gate belongs to the bucket, not the transport:
+// multiple transports can publish to the same tenant/workload series. Do not
+// hold l.mu while waiting for the gate or calling record, so observations and
+// token bucket operations do not wait on telemetry under the limiter lock.
+func (l *WorkloadLimiter) publishEffectiveRate(tenantID string, wl Workload, record func(float64)) {
+	l.mu.Lock()
+	st := l.adaptive[limiterKey{tenantID: tenantID, workload: wl}]
+	l.mu.Unlock()
+	if st == nil {
+		return
+	}
+
+	st.publication <- struct{}{}
+	defer func() { <-st.publication }()
+	l.mu.Lock()
+	perMinute := float64(st.cur) * 60
+	l.mu.Unlock()
+	record(perMinute)
 }
 
 // ObserveSuccess tells the limiter a request it admitted at issuedAt came back
@@ -266,7 +289,10 @@ func (l *WorkloadLimiter) limiterFor(tenantID string, wl Workload) *rate.Limiter
 	lim := rate.NewLimiter(spec.every, spec.burst)
 	l.limiters[key] = lim
 	if spec.adaptive != nil {
-		l.adaptive[key] = &adaptiveState{spec: *spec.adaptive, base: spec.every, baseBurst: spec.burst, cur: spec.every}
+		l.adaptive[key] = &adaptiveState{
+			spec: *spec.adaptive, base: spec.every, baseBurst: spec.burst, cur: spec.every,
+			publication: make(chan struct{}, 1),
+		}
 	}
 	return lim
 }
