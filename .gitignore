@@ -63,5 +63,11 @@ codex/
 # loop-pi (pi-subagents writes .pi/subagents/)
 .pi/
 
-# Local dashboard renders for demos and videos, never committed
-/screenshots/
+# Dashboard screenshots. Only the redacted Teams captures and the README previews are tracked;
+# redact a new capture before adding it. Everything else under screenshots/ stays local.
+/screenshots/*
+!/screenshots/readme/
+!/screenshots/teams/
+/screenshots/teams/*
+!/screenshots/teams/*-dark.png
+!/screenshots/teams/*-light.png

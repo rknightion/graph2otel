@@ -49,6 +49,52 @@ all generated. The dashboards use Grafana's v2 dynamic format and need
 Grafana 13.0.0 or newer. See
 [Deploying observability](docs/deploying-observability.md).
 
+## Teams dashboard
+
+The Teams dashboard covers call quality, sites and network, users, call queues,
+PSTN and Direct Routing, inventory, usage and service health. These captures come
+from a lab tenant with generated call traffic. Account names, identifiers, phone
+numbers and some addresses are replaced with placeholders. Select a picture to see
+the full page, or start with the
+[Teams observability guide](docs/teams-observability.md).
+
+<a href="screenshots/teams/01-overview-dark.png"><img src="screenshots/readme/overview.png" alt="Teams overview tab with call totals, share of good calls and service status" width="100%"></a>
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="screenshots/teams/02-call-quality-dark.png"><img src="screenshots/readme/call-quality.png" alt="Teams call quality tab with stream verdicts and quality charts" width="100%"></a><br><sub>Call quality: verdicts, round-trip time, jitter and packet loss</sub></td>
+<td width="50%" valign="top"><a href="screenshots/teams/03-sites-and-network-dark.png"><img src="screenshots/readme/sites.png" alt="Teams sites tab with a world map and sites ranked by network quality" width="100%"></a><br><sub>Sites: map and site rankings</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="screenshots/teams/06-call-detail-dark.png"><img src="screenshots/readme/call-detail.png" alt="Teams call detail tab with a stream timeline" width="100%"></a><br><sub>Call detail: every stream of one call</sub></td>
+<td width="50%" valign="top"><a href="screenshots/teams/07-users-dark.png"><img src="screenshots/readme/users.png" alt="Teams users tab with top callers and one user's streams" width="100%"></a><br><sub>Users: top users and one selected user</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="screenshots/teams/09-auto-attendant-and-call-queue-dark.png"><img src="screenshots/readme/queues.png" alt="Teams call queue and auto attendant tab" width="100%"></a><br><sub>Call queues and auto attendants</sub></td>
+<td width="50%" valign="top"><a href="screenshots/teams/08-pstn-and-direct-routing-dark.png"><img src="screenshots/readme/pstn.png" alt="Teams PSTN and Direct Routing tab" width="100%"></a><br><sub>PSTN and Direct Routing</sub></td>
+</tr>
+</table>
+
+<details>
+<summary>All full-page captures</summary>
+
+- [Overview](screenshots/teams/01-overview-dark.png)
+- [Call quality](screenshots/teams/02-call-quality-dark.png)
+- [Sites and network](screenshots/teams/03-sites-and-network-dark.png)
+- [Network topology](screenshots/teams/04-network-topology-dark.png)
+- [Call detail](screenshots/teams/06-call-detail-dark.png)
+- [Users, one user selected](screenshots/teams/07-users-dark.png)
+- [Users](screenshots/teams/07-users-pick-dark.png)
+- [PSTN and Direct Routing](screenshots/teams/08-pstn-and-direct-routing-dark.png)
+- [Auto attendant and call queue](screenshots/teams/09-auto-attendant-and-call-queue-dark.png)
+- [Phone inventory](screenshots/teams/10-phone-inventory-dark.png)
+- [Configuration](screenshots/teams/11-configuration-dark.png)
+- [Usage](screenshots/teams/12-usage-dark.png)
+- [Service health](screenshots/teams/13-service-health-dark.png)
+- [Collector health](screenshots/teams/14-collector-health-dark.png)
+
+</details>
+
 ## Quickstart
 
 For a Teams-only deployment, start with the [Teams observability guide](docs/teams-observability.md).

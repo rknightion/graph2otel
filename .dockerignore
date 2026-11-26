@@ -2,6 +2,7 @@
 .github
 *.md
 docs/
+screenshots/
 deploy/grafana/
 /graph2otel
 *_test.go
