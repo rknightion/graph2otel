@@ -135,6 +135,7 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 	mux.HandleFunc("/api/status.json", s.handleStatusJSON)
 	mux.HandleFunc("/api/config.json", s.handleConfigJSON)
 	mux.HandleFunc("/api/cardinality.json", s.handleCardinalityJSON)
+	mux.HandleFunc(consoleFontPrefix, s.handleFont)
 	mux.HandleFunc("/", s.handleIndex)
 	s.mux = mux
 	s.srv = &http.Server{

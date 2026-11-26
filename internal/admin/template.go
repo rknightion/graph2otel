@@ -44,6 +44,16 @@ var funcs = template.FuncMap{
 			return "muted"
 		}
 	},
+	// stateGlyph is the shape or icon that carries an availability state
+	// without color (design system v2: color is never the only signal).
+	"stateGlyph": func(state string) template.HTML { return iconUse(stateGlyphName(state), "gl") },
+	// skipGlyph is stateGlyph for a skip category.
+	"skipGlyph": func(category string) template.HTML { return iconUse(skipGlyphName(category), "gl") },
+	// shapeFor maps a health/readiness badge class to its status shape:
+	// filled circle healthy, diamond degraded, hollow ring starting.
+	"shapeFor": func(class string) template.HTML { return iconUse(shapeName(class), "gl") },
+	// headroomClass is the throttle headroom color ramp (state class).
+	"headroomClass": headroomClass,
 	// sparkline renders a recent-duration trend as an inline SVG polyline.
 	// Returns "" for fewer than two points (nothing meaningful to draw).
 	"sparkline": sparkline,
@@ -75,7 +85,10 @@ func sparkline(series []int64) template.HTML { return sparklineOf(series) }
 // sparklineF builds an inline SVG polyline from a recent float series.
 func sparklineF(series []float64) template.HTML { return sparklineOf(series) }
 
-// sparklineOf builds an inline SVG polyline (viewBox 0..100 x 0..24) from the
+// Sparkline geometry is the family small-chart standard: 100 x 22, no axis.
+const sparkW, sparkH = 100.0, 22.0
+
+// sparklineOf builds an inline SVG polyline (viewBox 0..100 x 0..22) from the
 // most recent samples. A flat line is drawn when every sample is equal.
 func sparklineOf[T sparkNumber](series []T) template.HTML {
 	pts := tail(series, sparkMaxPoints)
@@ -92,7 +105,7 @@ func sparklineOf[T sparkNumber](series []T) template.HTML {
 		}
 	}
 	span := float64(maxV) - float64(minV)
-	const w, h = 100.0, 24.0
+	const w, h = sparkW, sparkH
 	var b strings.Builder
 	for i, v := range pts {
 		x := float64(i) / float64(len(pts)-1) * w
@@ -107,7 +120,7 @@ func sparklineOf[T sparkNumber](series []T) template.HTML {
 		fmt.Fprintf(&b, "%.1f,%.1f", x, y)
 	}
 	return template.HTML(fmt.Sprintf( //nolint:gosec // G203: all inputs are numeric, no user data
-		`<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="%s"/></svg>`,
+		`<svg class="spark" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><polyline points="%s"/></svg>`,
 		b.String()))
 }
 
@@ -128,7 +141,82 @@ func outcomeStrip(series []bool) template.HTML {
 		}
 	}
 	b.WriteString(`</span>`)
-	return template.HTML(b.String()) //nolint:gosec // G203: fixed markup, no user data
+	failed := 0
+	for _, ok := range pts {
+		if !ok {
+			failed++
+		}
+	}
+	// The strip is never the only carrier: a plain-text count follows it.
+	fmt.Fprintf(&b, `<span class="ocount">%d of %d failed</span>`, failed, len(pts))
+	return template.HTML(b.String()) //nolint:gosec // G203: fixed markup, numeric values only
+}
+
+// stateGlyphName maps an availability state to its glyph id in the page's
+// icon sprite. Unknown future states read as the hollow ring (starting).
+func stateGlyphName(state string) string {
+	switch state {
+	case "healthy", "healthy_empty":
+		return "s-circle"
+	case "limited", "degraded":
+		return "i-warning"
+	case "blocked":
+		return "i-prohibit"
+	case "failed", "startup_failed":
+		return "i-warning-circle"
+	case "covered":
+		return "i-arrows-split"
+	default: // disabled, starting and any unknown state
+		return "s-ring"
+	}
+}
+
+// skipGlyphName maps a skip category to its glyph id; a plain opt-out has none.
+func skipGlyphName(category string) string {
+	switch category {
+	case skipCatLicense:
+		return "i-warning"
+	case skipCatExperimental:
+		return "i-info"
+	default:
+		return ""
+	}
+}
+
+// shapeName maps a badge class (healthClass output) to a status shape.
+func shapeName(class string) string {
+	switch class {
+	case "ok":
+		return "s-circle"
+	case "err":
+		return "s-diamond"
+	default:
+		return "s-ring"
+	}
+}
+
+// headroomClass colors a throttle headroom percentage: ok above 60, warn from
+// 20 to 60, err below 20. 20 percent left is the 80 percent saturation line the
+// g2o throttle alerts already use.
+func headroomClass(pct float64) string {
+	switch {
+	case pct > 60:
+		return "ok"
+	case pct >= 20:
+		return "warn"
+	default:
+		return "err"
+	}
+}
+
+// iconUse references a symbol in the page's inline icon sprite. An empty id
+// renders nothing.
+func iconUse(id, class string) template.HTML {
+	if id == "" {
+		return ""
+	}
+	return template.HTML(fmt.Sprintf( //nolint:gosec // G203: id and class are fixed internal literals
+		`<svg class="%s" aria-hidden="true"><use href="#%s"/></svg>`, class, id))
 }
 
 // render writes the HTML status page for p to w.
