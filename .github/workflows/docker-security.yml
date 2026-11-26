@@ -1,7 +1,5 @@
 name: Docker Security
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: '33 5 * * 2'
   workflow_dispatch:
