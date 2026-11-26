@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -513,16 +514,9 @@ func TestPlatformLocSiblingIsNeverUsedAsALabel(t *testing.T) {
 	}
 }
 
-// TestCollectStampsReportExportTransport pins that this collector names its own
-// transport (#141).
-//
-// The stamp is here, on the collector, rather than in an engine — and that is
-// forced, not a shortcut. internal/exportjob has ZERO LogEvent call sites: it
-// creates, polls, and downloads a job, then hands rows back for the collector to
-// emit. So there is no engine seam to stamp report_export from, and without this
-// the Scheduler's "graph" baseline would be the only stamp these rows ever got,
-// which would be a confident lie about a transport that is not Graph polling.
-func TestCollectStampsReportExportTransport(t *testing.T) {
+// The export runner returns rows, not logs. The collector must stamp its own
+// logs, so the recorder starts with no transport stamp.
+func TestCollectReportsAndStampsReportExportTransport(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{row("Contoso Agent", "app-1", "5", 10, 2, 1, 3, 0)}}, nil)
 	rec := telemetrytest.New()
 
@@ -534,9 +528,15 @@ func TestCollectStampsReportExportTransport(t *testing.T) {
 	if len(logs) == 0 {
 		t.Fatal("no log records emitted")
 	}
+	const want = "report_export"
+	declared := string(collector.TransportOf(c))
 	for i, l := range logs {
-		if got := l.Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportReportExport) {
-			t.Errorf("log[%d] %s = %q, want %q", i, semconv.AttrIngestTransport, got, telemetry.TransportReportExport)
+		got := l.Attrs["ingest_transport"]
+		if got != want {
+			t.Errorf("log[%d] ingest_transport = %q, want %q", i, got, want)
+		}
+		if declared != got {
+			t.Errorf("log[%d] declared transport = %q, emitted %q", i, declared, got)
 		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -643,9 +644,9 @@ func TestRun_CreateGivesUpAfterMaxRetries(t *testing.T) {
 	}
 }
 
-// TestRunStampsAuditQueryTransport pins that every record this engine emits
-// names the transport that produced it (#141).
-func TestRunStampsAuditQueryTransport(t *testing.T) {
+// The collector's declared transport (read by admin and scheduler) must
+// agree with the transport on its emitted records.
+func TestJobCollectorReportsAndStampsAuditQueryTransport(t *testing.T) {
 	rec := telemetrytest.New()
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := from.Add(time.Hour)
@@ -665,15 +666,20 @@ func TestRunStampsAuditQueryTransport(t *testing.T) {
 		},
 	}
 
-	if _, err := Run(context.Background(), cfg, newCheckpoint("t1", cfg.CreatePath), from, to, client, rec.Emitter(), nil); err != nil {
-		t.Fatalf("Run: %v", err)
+	c := NewJobCollector("test.audit", time.Minute, 0, "t1", cfg, client, checkpoint.NewStore(t.TempDir()))
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
 	}
 
 	logs := rec.LogRecords()
 	if len(logs) != 1 {
 		t.Fatalf("got %d log records, want 1", len(logs))
 	}
-	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportAuditQuery) {
-		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportAuditQuery)
+	got := logs[0].Attrs[semconv.AttrIngestTransport]
+	if got != "audit_query" {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, "audit_query")
+	}
+	if declared := string(collector.TransportOf(c)); declared != got {
+		t.Errorf("declared transport = %q, emitted %q", declared, got)
 	}
 }
