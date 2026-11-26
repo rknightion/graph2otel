@@ -19,7 +19,7 @@ func TestTeamsAuditEndToEnd(t *testing.T) {
 		{"Id":"created","Operation":"TeamCreated","TeamGuid":"team-opaque","TeamName":"Example Team","AADGroupId":"different-group"},
 		{"Id":"settings","Operation":"TeamSettingChanged","TeamGuid":"team-opaque","TeamName":"Example Team","ModifiedProperties":[{"Name":"TestSetting","NewValue":"unmapped-field-sentinel"}]},
 		{"Id":"channel","Operation":"ChannelAdded","TeamGuid":"team-opaque","TeamName":"Example Team","ChannelGuid":"channel-opaque","ChannelName":"Example Channel"},
-		{"Id":"tab","Operation":"TabAdded","TeamGuid":"team-opaque","TeamName":"Example Team","ChannelGuid":"channel-opaque","ChannelName":"Example Channel","AddOnGuid":"unvetted-addon-id"},
+		{"Id":"tab","Operation":"TabAdded","TeamGuid":"team-opaque","TeamName":"Example Team","ChannelGuid":"channel-opaque","ChannelName":"Example Channel","AddOnGuid":"tab::example-addon"},
 		{"Id":"member","Operation":"MemberAdded","TeamGuid":"team-opaque","TeamName":"Example Team","Members":[
 			{"DisplayName":"Example Member","OrganizationId":"example-org","Role":2,"UPN":"one@example.com","Unknown":"unmapped-field-sentinel"},
 			{"DisplayName":"Another Member","OrganizationId":"other-org","Role":1,"UPN":"two@example.com"},
@@ -109,10 +109,14 @@ func TestTeamsAuditEndToEnd(t *testing.T) {
 				t.Errorf("%s: %s = %q (present %t), want %q (present %t)", id, key, got, present, value, expected)
 			}
 		}
+		// AddOnGuid is emitted as served since #665; other records carry none.
+		if got, want := a["teams_addon_id"], map[string]string{"tab": "tab::example-addon"}[id]; got != want {
+			t.Errorf("%s: teams_addon_id = %q, want %q", id, got, want)
+		}
 		if id == "session" && a["object_id"] != "opaque-session-object" {
 			t.Errorf("session object_id = %q, want opaque wire value", a["object_id"])
 		}
-		for _, forbidden := range []string{"unmapped-field-sentinel", "unvetted-addon-id"} {
+		for _, forbidden := range []string{"unmapped-field-sentinel"} {
 			if strings.Contains(log.Body, forbidden) {
 				t.Errorf("%s: body leaked %q", id, forbidden)
 			}

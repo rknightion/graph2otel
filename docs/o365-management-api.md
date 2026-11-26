@@ -68,11 +68,66 @@ does not replay records that were filtered before.
 Live-measured 2026-11-25: a read-only probe of the existing `Audit.General`
 subscription saw `TeamCreated`, `MemberAdded`, `TeamSettingChanged`,
 `ChannelAdded`, `TabAdded` and `TeamsSessionStarted` under type 25, and
-`TeamsAdminAction` and `WriteUserObjPreference` under type 57. It did not see
-meeting join activity. These records currently use the generic `m365.audit`
-attributes, including `operation` and `record_type_id`. A Teams session's
-`object_id` stays opaque; the probe does not establish that it identifies a
-team, channel or meeting.
+`TeamsAdminAction` and `WriteUserObjPreference` under type 57. Meeting and
+call records followed on 2026-11-25 and 2026-11-26: `MeetingDetail`,
+`MeetingParticipantDetail` and `CallParticipantDetail`, plus `AppDeleted`
+and the chat and message operations.
+
+### Teams fields on `m365.audit`
+
+Type 25 records with workload `MicrosoftTeams` carry these attributes beside
+the generic ones, each only when the record has the source field. Type 57
+records keep the generic attributes only.
+
+| Attribute | Source field | Seen on |
+| --- | --- | --- |
+| `team_guid`, `team_name`, `channel_guid`, `channel_name` | `TeamGuid`, `TeamName`, `ChannelGuid`, `ChannelName` | team, channel, tab, message and channel-meeting records |
+| `teams_members_json`, `teams_members_count`, `teams_members_truncated` | `Members` | `MemberAdded` |
+| `teams_meeting_detail_id` | `MeetingDetailId` | `MeetingParticipantDetail` |
+| `call_id` | `CallId` | `CallParticipantDetail` |
+| `teams_join_time`, `teams_leave_time`, `teams_joined_from_lobby` | `JoinTime`, `LeaveTime`, `IsJoinedFromLobby` | participant records |
+| `teams_meeting_start_time`, `teams_meeting_end_time`, `teams_meeting_url` | `StartTime`, `EndTime`, `MeetingURL` | `MeetingDetail` |
+| `teams_communication_type`, `teams_communication_sub_type`, `teams_modalities`, `teams_provider_types` | the fields of the same names | `CommunicationType` on most records, the rest on `MeetingDetail` |
+| `teams_organizer_object_id`, `teams_organizer_organization_id` | `Organizer.UserObjectId`, `Organizer.OrganizationId` | meeting records |
+| `teams_attendees_json`, `teams_attendees_count`, `teams_attendees_truncated` | `Attendees`, including `InviterInfo` | participant records |
+| `user_agent`, `teams_users_invited_during_meeting`, `teams_rtmp_in_enabled` | `ExtraProperties` keys `UserAgent`, `UsersInvitedDuringMeeting`, `RTMPInEnabled` | meeting and call records |
+| `teams_device_id`, `teams_device_information` | `DeviceId`, `DeviceInformation` | session, sign-out and participant records |
+| `teams_addon_id`, `teams_addon_type_id`, `teams_addon_name`, `teams_tab_type` | `AddOnGuid`, `AddOnType`, `AddOnName`, `TabType` | `AppDeleted`, `TabAdded` |
+| `teams_has_foreign_tenant_users`, `teams_has_guest_users`, `teams_has_other_guest_users`, `teams_has_unauthenticated_users`, `teams_participating_tenant_ids` | `ParticipantInfo` | team, channel, chat, message and call records |
+
+The member and attendee lists are JSON arrays of the observed keys only, capped
+at 50 rows and 8 KiB. The `_count` attribute is the full wire count, so a
+capped list still says how many there were. The join, leave, start and end
+times arrive without a zone, like `CreationTime`, and are emitted as RFC 3339
+UTC. Times inside the JSON lists, such as an inviter's `invite_time`, stay as
+served.
+
+Wire facts `[live-measured 2026-11-26, #665]`, from 12 redacted records in
+`internal/collectors/m365/activity/testdata/teams_audit_live.json`:
+
+- `MeetingParticipantDetail.MeetingDetailId` equals the `Id` of the
+  `MeetingDetail` record for the same meeting in 8 of 8 sampled pairs. Join
+  `teams_meeting_detail_id` to the meeting record's `id`.
+- `CallParticipantDetail.CallId` matched `call_id` on a `teams.call` log for
+  both calls checked, so it uses the same attribute name.
+- `MeetingURL` is served without a scheme. With `https://` in front it
+  matched a `teams.call` `join_web_url` exactly, in the one case checked. It
+  is emitted as served. It was present on channel meetings and absent on the
+  ad hoc and escalated calls.
+- A meeting's `CreationTime` was up to about 8.5 hours after its `StartTime`.
+  Use `teams_meeting_start_time` for when the meeting happened.
+- On a missed call, `JoinTime` equals `LeaveTime`.
+- A PSTN attendee's `DisplayName` is its phone number. A bot attendee's
+  `DisplayName` was the bot's app id.
+- `AddOnGuid` is a bare GUID on `AppDeleted` and `tab::<guid>` on
+  `TabAdded`. It has not been matched against Graph's Teams app catalogue, so
+  it is named for the field. `AddOnType` is emitted as a number because no
+  sample shows its names.
+- A Teams session's `object_id` was a client descriptor shaped like
+  `<platform> (<number>/<version>)`, not a team, channel or meeting id.
+- `ConferenceUri` was empty on every meeting record, and
+  `ParticipatingDomains` and `ParticipatingSIPDomains` were empty lists on
+  every record, so none of them is read.
 
 If you need to reduce what you fetch, the experimental Graph collector
 `m365.unified_audit` uses a fixed server-side `recordTypeFilters` list that
