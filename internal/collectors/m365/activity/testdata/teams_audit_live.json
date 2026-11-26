@@ -1,0 +1,431 @@
+[
+  {
+    "CreationTime": "2026-11-25T23:44:44",
+    "Id": "00000000-0000-4000-8000-000000000001",
+    "Operation": "MeetingDetail",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000003",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "198.51.100.1",
+    "UserId": "person1@example.com",
+    "ChannelGuid": "19:00000000000000000000000000000001@thread.tacv2",
+    "CommunicationSubType": "AdHocMeeting, ChannelMeeting",
+    "CommunicationType": "Meeting",
+    "ConferenceUri": "",
+    "EndTime": "2026-11-25T15:15:22",
+    "ExtraProperties": [
+      {
+        "Key": "UserAgent",
+        "Value": "SkypeSpaces/1415/26110100716/os=linux; osVer=undefined; deviceType=computer; browser=chrome; browserVer=127.0.0.0/TsCallingVersion=2026.42.01.12/Ovb=611c636ac53930844697ebcd9b226941eab6cbd4"
+      },
+      {
+        "Key": "UsersInvitedDuringMeeting",
+        "Value": "False"
+      },
+      {
+        "Key": "RTMPInEnabled",
+        "Value": "False"
+      }
+    ],
+    "MessageId": "1700000000001",
+    "Modalities": "Audio",
+    "Organizer": {
+      "OrganizationId": "00000000-0000-4000-8000-000000000002",
+      "RecipientType": "User",
+      "UserObjectId": "00000000-0000-4000-8000-000000000003",
+      "Role": 2
+    },
+    "ProviderTypes": "Teams",
+    "StartTime": "2026-11-25T15:14:04",
+    "ItemName": "AdHocMeeting, ChannelMeeting",
+    "MeetingURL": "teams.microsoft.com/l/meetup-join/19%3a00000000000000000000000000000001%40thread.tacv2/1700000000001?context=%7b%22Tid%22%3a%2200000000-0000-4000-8000-000000000002%22%2c%22Oid%22%3a%2200000000-0000-4000-8000-000000000003%22%7d"
+  },
+  {
+    "CreationTime": "2026-11-25T23:44:44",
+    "Id": "00000000-0000-4000-8000-000000000004",
+    "Operation": "MeetingParticipantDetail",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000003",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "198.51.100.1",
+    "UserId": "person1@example.com",
+    "Attendees": [
+      {
+        "OrganizationId": "00000000-0000-4000-8000-000000000002",
+        "RecipientType": "InternalFederated",
+        "UserObjectId": "00000000-0000-4000-8000-000000000003",
+        "DisplayName": "Example Person 1",
+        "Role": 1,
+        "UPN": "person1@example.com"
+      }
+    ],
+    "ChannelGuid": "19:00000000000000000000000000000001@thread.tacv2",
+    "DeviceId": "00000000-0000-4000-8000-000000000005",
+    "ExtraProperties": [
+      {
+        "Key": "UserAgent",
+        "Value": "SkypeSpaces/1415/26110100716/os=linux; osVer=undefined; deviceType=computer; browser=chrome; browserVer=127.0.0.0/TsCallingVersion=2026.42.01.12/Ovb=611c636ac53930844697ebcd9b226941eab6cbd4"
+      }
+    ],
+    "IsJoinedFromLobby": false,
+    "JoinTime": "2026-11-25T15:14:04",
+    "LeaveTime": "2026-11-25T15:15:22",
+    "MeetingDetailId": "00000000-0000-4000-8000-000000000001",
+    "Organizer": {
+      "OrganizationId": "00000000-0000-4000-8000-000000000002",
+      "RecipientType": "User",
+      "UserObjectId": "00000000-0000-4000-8000-000000000003",
+      "Role": 2
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "DeviceInformation": "PC",
+    "ItemName": "AdHocMeeting, ChannelMeeting"
+  },
+  {
+    "CreationTime": "2026-11-25T20:01:41",
+    "Id": "00000000-0000-4000-8000-000000000006",
+    "Operation": "MeetingDetail",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000007",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "192.0.2.x",
+    "UserId": "person2@example.com",
+    "CommunicationSubType": "AdHocMeeting, Transfer, Escalation",
+    "CommunicationType": "Meeting",
+    "ConferenceUri": "",
+    "EndTime": "2026-11-25T11:27:21",
+    "ExtraProperties": [
+      {
+        "Key": "UserAgent",
+        "Value": "CallSignalingAgent (50/26304.1206.5384.1209/26110100716;release_user/verif_delivery/ahtilego/bp_4828384_r42/20261029t165428z.2026.42.01.12;releases/CL2026.R42)"
+      },
+      {
+        "Key": "UsersInvitedDuringMeeting",
+        "Value": "True"
+      },
+      {
+        "Key": "RTMPInEnabled",
+        "Value": "False"
+      }
+    ],
+    "Modalities": "Audio",
+    "Organizer": {
+      "OrganizationId": "00000000-0000-4000-8000-000000000002",
+      "RecipientType": "User",
+      "UserObjectId": "00000000-0000-4000-8000-000000000007",
+      "Role": 2
+    },
+    "ProviderTypes": "Teams, PSTN",
+    "StartTime": "2026-11-25T11:26:33",
+    "ItemName": "AdHocMeeting, Transfer, Escalation"
+  },
+  {
+    "CreationTime": "2026-11-25T20:01:41",
+    "Id": "00000000-0000-4000-8000-000000000008",
+    "Operation": "MeetingParticipantDetail",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000007",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "192.0.2.x",
+    "UserId": "person2@example.com",
+    "Attendees": [
+      {
+        "InviterInfo": {
+          "InviteTime": "2026-11-25T11:26:46",
+          "OrganizationId": "00000000-0000-4000-8000-000000000002",
+          "UserType": "Teams",
+          "DisplayName": "Example Person 2",
+          "UPN": "person2@example.com",
+          "UserIdentifier": "orgid:00000000-0000-4000-8000-000000000007"
+        },
+        "DisplayName": "00000000-0000-4000-8000-000000000009",
+        "Role": 1
+      }
+    ],
+    "ExtraProperties": [
+      {
+        "Key": "UserAgent",
+        "Value": "appid:00000000-0000-4000-8000-000000000009 Microsoft.Skype.Platform.Echo.Logic/1.11.2358.0"
+      }
+    ],
+    "IsJoinedFromLobby": false,
+    "JoinTime": "2026-11-25T11:26:46",
+    "LeaveTime": "2026-11-25T11:27:01",
+    "MeetingDetailId": "00000000-0000-4000-8000-000000000006",
+    "Organizer": {
+      "OrganizationId": "00000000-0000-4000-8000-000000000002",
+      "RecipientType": "User",
+      "UserObjectId": "00000000-0000-4000-8000-000000000007",
+      "Role": 2
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "ItemName": "AdHocMeeting, Transfer, Escalation"
+  },
+  {
+    "CreationTime": "2026-11-25T15:23:29",
+    "Id": "00000000-0000-4000-8000-000000000010",
+    "Operation": "CallParticipantDetail",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000007",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "UserId": "person2@example.com",
+    "Attendees": [
+      {
+        "IsAADGuest": false,
+        "IsOrganizer": false,
+        "ProviderType": "Teams, PSTN",
+        "UserIdType": "PstnNumber",
+        "DisplayName": "+15555550001",
+        "Role": 1
+      }
+    ],
+    "CallId": "00000000-0000-4000-8000-000000000011",
+    "ExtraProperties": [
+      {
+        "Key": "UserAgent",
+        "Value": "pstn (Teams/)"
+      }
+    ],
+    "JoinTime": "2026-11-25T11:04:47",
+    "LeaveTime": "2026-11-25T11:04:47",
+    "ParticipantInfo": {
+      "ParticipatingTenantIds": [
+        "00000000-0000-4000-8000-000000000002"
+      ]
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "ItemName": "Missed"
+  },
+  {
+    "CreationTime": "2026-11-25T15:23:29",
+    "Id": "00000000-0000-4000-8000-000000000012",
+    "Operation": "CallParticipantDetail",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000007",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "UserId": "person2@example.com",
+    "Attendees": [
+      {
+        "IsAADGuest": false,
+        "IsOrganizer": true,
+        "OrganizationId": "00000000-0000-4000-8000-000000000002",
+        "ProviderType": "Teams, PSTN",
+        "RecipientType": "InternalFederated",
+        "UserIdType": "ObjectId",
+        "UserObjectId": "00000000-0000-4000-8000-000000000007",
+        "DisplayName": "Example Person 2",
+        "Role": 1,
+        "UPN": "person2@example.com"
+      }
+    ],
+    "CallId": "00000000-0000-4000-8000-000000000011",
+    "ExtraProperties": [
+      {
+        "Key": "UserAgent",
+        "Value": "CallSignalingAgent (50/26304.1206.5384.1209/26110100716;release_user/verif_delivery/ahtilego/bp_4828384_r42/20261029t165428z.2026.42.01.12;releases/CL2026.R42)"
+      }
+    ],
+    "JoinTime": "2026-11-25T11:04:47",
+    "LeaveTime": "2026-11-25T11:04:47",
+    "ParticipantInfo": {
+      "ParticipatingTenantIds": [
+        "00000000-0000-4000-8000-000000000002"
+      ]
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "ItemName": "Missed"
+  },
+  {
+    "AppAccessContext": {
+      "AADSessionId": "00000000-0000-4000-8000-000000000013",
+      "IssuedAtTime": "2026-11-26T13:01:50",
+      "UniqueTokenId": "exampleTokenId00000001"
+    },
+    "CreationTime": "2026-11-26T13:09:08",
+    "Id": "00000000-0000-4000-8000-000000000014",
+    "Operation": "AppDeleted",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000015",
+    "UserType": 5,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "UserId": "Microsoft Teams Sync",
+    "AddOnGuid": "00000000-0000-4000-8000-000000000016",
+    "AddOnType": 4,
+    "OperationScope": 3
+  },
+  {
+    "AppAccessContext": {
+      "IssuedAtTime": "2026-11-25T09:40:54",
+      "UniqueTokenId": "exampleTokenId00000002"
+    },
+    "CreationTime": "2026-11-25T09:46:10",
+    "Id": "00000000-0000-4000-8000-000000000017",
+    "Operation": "TabAdded",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000018",
+    "UserType": 5,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "::ffff:192.0.2.2",
+    "UserId": "Microsoft Teams Services",
+    "AADGroupId": "00000000-0000-4000-8000-000000000019",
+    "AddOnGuid": "tab::00000000-0000-4000-8000-000000000020",
+    "AddOnType": 3,
+    "ChannelGuid": "19:exampleTeamThread0002@thread.tacv2",
+    "ChannelType": "Standard",
+    "CommunicationType": "Channel",
+    "IsBilateral": false,
+    "ParticipantInfo": {
+      "HasForeignTenantUsers": false,
+      "HasGuestUsers": false,
+      "HasUnauthenticatedUsers": false,
+      "ParticipatingDomains": [],
+      "ParticipatingSIPDomains": []
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "TabType": "extension",
+    "TeamGuid": "19:exampleTeamThread0002@thread.tacv2",
+    "UserMRI": "28:app:00000000-0000-4000-8000-000000000002_00000000-0000-4000-8000-000000000018",
+    "AddOnName": "Notes",
+    "AddOnUrl": "https://example.invalid/tab-content",
+    "ChannelName": "General",
+    "TeamName": "Example Team 1"
+  },
+  {
+    "AppAccessContext": {
+      "AADSessionId": "00000000-0000-4000-8000-000000000021",
+      "IssuedAtTime": "2026-11-25T10:45:00",
+      "UniqueTokenId": "exampleTokenId00000003"
+    },
+    "CreationTime": "2026-11-25T11:28:58",
+    "Id": "00000000-0000-4000-8000-000000000022",
+    "Operation": "TeamsSessionStarted",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000007",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "2001:db8::3",
+    "ObjectId": "Ios (1417/8.21.77.2026212702)",
+    "UserId": "person2@example.com",
+    "DeviceId": "00000000-0000-4000-8000-000000000023"
+  },
+  {
+    "CreationTime": "2026-11-25T14:55:11",
+    "Id": "00000000-0000-4000-8000-000000000024",
+    "Operation": "TeamsUserSignedOut",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "ResultStatus": "Successful",
+    "UserKey": "00000000-0000-4000-8000-000000000007",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "2001:db8::4",
+    "ObjectId": "MacT21 (50/26110100716)",
+    "UserId": "person2@example.com",
+    "DeviceInformation": "MacT21"
+  },
+  {
+    "AppAccessContext": {
+      "IssuedAtTime": "2026-11-25T09:40:53",
+      "UniqueTokenId": "exampleTokenId00000004"
+    },
+    "CreationTime": "2026-11-25T09:45:57",
+    "Id": "00000000-0000-4000-8000-000000000025",
+    "Operation": "MemberAdded",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000026",
+    "UserType": 5,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "ClientIP": "::ffff:192.0.2.5",
+    "UserId": "example-app-1",
+    "AADGroupId": "00000000-0000-4000-8000-000000000019",
+    "CommunicationType": "Team",
+    "ExtraProperties": [],
+    "IsBilateral": false,
+    "Members": [
+      {
+        "OrganizationId": "00000000-0000-4000-8000-000000000002",
+        "DisplayName": "Example Person 1",
+        "Role": 2,
+        "UPN": "person1@example.com"
+      },
+      {
+        "OrganizationId": "00000000-0000-4000-8000-000000000002",
+        "DisplayName": "Example Person 3",
+        "Role": 1,
+        "UPN": "person3@example.com"
+      }
+    ],
+    "ParticipantInfo": {
+      "HasForeignTenantUsers": false,
+      "HasGuestUsers": false,
+      "HasUnauthenticatedUsers": false,
+      "ParticipatingDomains": [],
+      "ParticipatingSIPDomains": []
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "TeamGuid": "19:exampleTeamThread0002@thread.tacv2",
+    "UserMRI": "28:app:00000000-0000-4000-8000-000000000002_00000000-0000-4000-8000-000000000026",
+    "ItemName": "Example Team 1",
+    "TeamName": "Example Team 1"
+  },
+  {
+    "CreationTime": "2026-11-25T15:07:58",
+    "Id": "00000000-0000-4000-8000-000000000027",
+    "Operation": "MessageReadReceiptReceived",
+    "OrganizationId": "00000000-0000-4000-8000-000000000002",
+    "RecordType": 25,
+    "UserKey": "00000000-0000-4000-8000-000000000028",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "MicrosoftTeams",
+    "UserId": "person3@example.com",
+    "ChatThreadId": "19:00000000-0000-4000-8000-000000000003_00000000-0000-4000-8000-000000000028@unq.gbl.spaces.example",
+    "CommunicationType": "GroupChat",
+    "ExtraProperties": [],
+    "IsBilateral": false,
+    "MessageId": "1700000000002",
+    "MessageVersion": "0",
+    "MessageVisibilityTime": "2026-11-25T14:57:41",
+    "ParticipantInfo": {
+      "HasForeignTenantUsers": false,
+      "HasGuestUsers": false,
+      "HasOtherGuestUsers": false,
+      "HasUnauthenticatedUsers": false,
+      "ParticipatingDomains": [],
+      "ParticipatingSIPDomains": [],
+      "ParticipatingTenantIds": [
+        "00000000-0000-4000-8000-000000000002"
+      ]
+    },
+    "ResourceTenantId": "00000000-0000-4000-8000-000000000002",
+    "UserMRI": "8:orgid:00000000-0000-4000-8000-000000000028",
+    "ItemName": "19:00000000-0000-4000-8000-000000000003_00000000-0000-4000-8000-000000000028@unq.gbl.spaces.example"
+  }
+]
