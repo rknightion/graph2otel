@@ -25214,7 +25214,7 @@
         "spec": {
           "id": 4006,
           "title": "Selected user's poor-stream share",
-          "description": "Share of the user's directional stream records classified poor over the range. Colour meaning: graph2otel triage bands.",
+          "description": "Share of the user's directional stream records classified poor over the range. If it is empty: no stream record for the selected user is visible in the range; this is not 0%. Colour meaning: graph2otel triage bands.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -25298,7 +25298,7 @@
                   "color": {
                     "mode": "thresholds"
                   },
-                  "noValue": "0%"
+                  "noValue": "No data yet. See panel info."
                 },
                 "overrides": []
               }
@@ -25575,6 +25575,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -25924,6 +25936,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -26331,6 +26355,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -26865,6 +26901,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -27081,6 +27129,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -27412,6 +27472,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -27873,6 +27945,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -28343,6 +28427,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -28592,6 +28688,18 @@
                     "matcher": {
                       "id": "byType",
                       "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
                     },
                     "properties": [
                       {
@@ -28894,6 +29002,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -29168,6 +29288,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -29204,7 +29336,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.collaboration_activity_user` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, user_principal_name, workload, report_refresh_date, report_period, last_activity_date, team_chat_message_count, private_chat_message_count, call_count, meetings_organized_count, meetings_attended_count, files_shared_internally_count, files_shared_externally_count, is_deleted",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.collaboration_activity_user` | tenant_id=~\"$tenant\" | tenant_id!=`` | workload=`teams` | keep tenant_id, user_principal_name, workload, report_refresh_date, report_period, last_activity_date, team_chat_message_count, private_chat_message_count, call_count, meetings_organized_count, meetings_attended_count, files_shared_internally_count, files_shared_externally_count, is_deleted",
                         "editorMode": "code",
                         "queryType": "range",
                         "maxLines": 1000
@@ -29585,6 +29717,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -29597,7 +29741,7 @@
         "spec": {
           "id": 4113,
           "title": "Teams message center posts",
-          "description": "Latest record per message center post whose services include Teams.",
+          "description": "Latest record per message center post whose services include Teams. Needs the graph profile: m365.servicemessages is not in the teams profile, so this table stays empty on a Teams-only install.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -29970,6 +30114,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -29982,7 +30138,7 @@
         "spec": {
           "id": 4114,
           "title": "Service health issue posts",
-          "description": "Posts on service health issues (all services). Match the issue ID to the Teams issue tables above.",
+          "description": "Posts on service health issues (all services). Match the issue ID to the Teams issue tables above. Posts carry no service field, so this lists posts for every service's issues.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -30219,6 +30375,30 @@
                         "value": "dateTimeAsIso"
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
                   }
                 ]
               }
@@ -30231,7 +30411,7 @@
         "spec": {
           "id": 4115,
           "title": "Detected licence tiers",
-          "description": "Premium Microsoft Entra/Intune capabilities graph2otel detected per tier. No series means no premium tier was detected.",
+          "description": "Premium Microsoft Entra/Intune capabilities graph2otel detected per tier. If it is empty: no premium tier was detected, or licence detection has not run yet. Colour meaning: green marks a detected tier, from graph2otel's licence detection (a constant 1 per detected tier); it is not a health verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -30307,7 +30487,7 @@
                   "color": {
                     "mode": "thresholds"
                   },
-                  "noValue": "No premium tier detected",
+                  "noValue": "No data yet. See panel info.",
                   "mappings": [
                     {
                       "type": "value",
@@ -33016,32 +33196,6 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 40,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-126"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 40,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-127"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 48,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -33054,12 +33208,38 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 57,
+                                  "y": 49,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-4114"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 58,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-126"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 58,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-127"
                                   }
                                 }
                               }
