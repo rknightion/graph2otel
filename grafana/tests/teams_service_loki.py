@@ -134,5 +134,49 @@ class TeamsIssueQueries(unittest.TestCase):
                          [("Closed title", "Final post")])
 
 
+class TeamsNavigationEvidenceQueries(unittest.TestCase):
+    def test_start_and_routing_navigation_show_scoped_source_rows(self):
+        startup = _query("graph2otel process starts")
+        polls = _query("Direct Routing effectiveness counts by poll")
+        calls = _query("Direct Routing records")
+        with _loki() as request:
+            at = time.time_ns()
+
+            def row(offset, event, tenant, **fields):
+                stamp = str(at + offset * 1_000_000_000)
+                return [stamp, f"Observation {offset}", {"event_name": event, "tenant_id": tenant, **fields}]
+
+            start = row(-50, "graph2otel.startup", "a", version="v0.1.0", config_fingerprint="0123456789abcdef")
+            start[1] = "graph2otel v0.1.0 started; config fingerprint 0123456789abcdef"
+            conflict = row(-10, "teams.direct_routing_poll", "a", trunk_fqdn="trunk.example",
+                           effective_attempts="1", poll_attempts="2", source_success_sip_4xx="1")
+            clean = row(-9, "teams.direct_routing_poll", "a", trunk_fqdn="trunk.example",
+                        effective_attempts="2", poll_attempts="2", source_success_sip_4xx="0")
+            raw = row(-40, "teams.direct_routing_call", "a", id="routing-1", trunk_fqdn="trunk.example",
+                      successful_call="true", final_sip_code="403")
+            entries = [start, conflict, clean, raw,
+                       row(-70, "graph2otel.startup", "a", version="outside-range"),
+                       row(-39, "graph2otel.startup", "ab", version="other-tenant"),
+                       row(-48, "teams.direct_routing_poll", "ab", trunk_fqdn="trunk.example",
+                           effective_attempts="3", poll_attempts="3", source_success_sip_4xx="3"),
+                       row(-7, "graph2otel.scrape", "a", version="not-a-start")]
+            request("/loki/api/v1/push", {"streams": [{"stream": {"service_name": "graph2otel"}, "values": entries}]})
+
+            def history(target):
+                self.assertEqual(target["queryType"], "range")
+                query = urlencode({"query": target["expr"].replace("$tenant", "a"), "start": str(at - 60_000_000_000),
+                                   "end": str(at), "limit": target.get("maxLines", 250)})
+                result = json.loads(request("/loki/api/v1/query_range?" + query))
+                return [(stamp, body, stream["stream"]) for stream in result["data"]["result"]
+                        for stamp, body in stream["values"]]
+
+            def expected(entry):
+                return entry[0], entry[1], {key: value for key, value in entry[2].items() if key != "event_name"}
+
+            self.assertEqual([(stamp, body) for stamp, body, _ in history(startup)], [tuple(start[:2])])
+            self.assertCountEqual(history(polls), [expected(conflict), expected(clean)])
+            self.assertEqual(history(calls), [expected(raw)])
+
+
 if __name__ == "__main__":
     unittest.main()

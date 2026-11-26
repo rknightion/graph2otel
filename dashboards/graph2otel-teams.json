@@ -282,6 +282,10 @@
             {
               "title": "Collector health",
               "url": "/d/graph2otel-teams?dtab=collector-health&from=${__from}&to=${__to}&${__all_variables}"
+            },
+            {
+              "title": "Open main graph2otel dashboard",
+              "url": "/d/graph2otel?dtab=overview&from=${__from}&to=${__to}&${tenant:queryparam}&${datasource:queryparam}&${loki_datasource:queryparam}"
             }
           ],
           "data": {
@@ -10079,7 +10083,12 @@
           "id": 80,
           "title": "Latest exported Direct Routing effectiveness",
           "description": "Each sample reflects the most recent available poll value, not a ratio over the selected range. Lookback can repeat a value between observations. Per trunk, the numerator is answered plus busy attempts. The denominator is all newly accepted attempts, including unknowns, not all attempts made. No new attempts means no new ratio. This is not an SBC health check or proof of connected media. Answered means Graph reports successful_call=true, even with SIP 403, which still counts in the 4xx class. Otherwise SIP 486 or 600 is busy. Other explicit failures or SIP 4xx to 6xx are failed; the rest are unknown.",
-          "links": [],
+          "links": [
+            {
+              "title": "See same-poll counts and source success / SIP 4xx conflicts",
+              "url": "/d/graph2otel-teams?dtab=pstn-and-direct-routing&viewPanel=81&from=${__from}&to=${__to}&${tenant:queryparam}&${datasource:queryparam}&${loki_datasource:queryparam}"
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -12339,7 +12348,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{capability}} \u00b7 {{number_type}} \u00b7 {{assignment_status}}"
+                        "legendFormat": "{{assignment_status}} \u00b7 {{number_type}} \u00b7 {{capability}} \u00b7 {{tenant_id}}"
                       }
                     }
                   }
@@ -13286,7 +13295,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Usage comes from Microsoft's daily Teams reports. The source refresh date can trail the poll, and the latest activity day can trail the refresh. Platform and activity groups overlap: never add them into a unique-user total."
+                "content": "Usage comes from Microsoft's daily Teams reports. Platform and activity groups overlap: never add them into a unique-user total.\n\nUsage snapshots in Loki are dated at **UTC midnight on the source refresh date**, not the poll or last activity date. If your range excludes that midnight, an empty result does not mean zero usage or a failed collection. [Find snapshots by refresh date](https://github.com/rknightion/graph2otel/blob/main/docs/signals.md#teams-usage-reports-snapshots-not-activity-events)."
               }
             }
           }
@@ -13388,7 +13397,12 @@
           "id": 1020,
           "title": "D7 report refresh date",
           "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). Not a poll time or an activity date. No date is shown if the report did not establish one. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate by report refresh date",
+              "url": "https://github.com/rknightion/graph2otel/blob/main/docs/signals.md#teams-usage-reports-snapshots-not-activity-events"
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -13562,7 +13576,12 @@
           "id": 1021,
           "title": "D30 report refresh date",
           "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). Not a poll time or an activity date. No date is shown if the report did not establish one. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate by report refresh date",
+              "url": "https://github.com/rknightion/graph2otel/blob/main/docs/signals.md#teams-usage-reports-snapshots-not-activity-events"
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -15811,6 +15830,79 @@
                     ]
                   }
                 ]
+              }
+            }
+          }
+        }
+      },
+      "panel-1041": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1041,
+          "title": "graph2otel process starts",
+          "description": "One observation per process start per configured tenant. Compare build versions or configuration fingerprints between starts. A start is not evidence of a crash or of a successful scrape.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`graph2otel.startup` | tenant_id=~\"$tenant\"",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No data yet. No process-start observations in range. Check the Loki datasource. This is not a collector health verdict.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
               }
             }
           }
@@ -18071,7 +18163,7 @@
                                   "x": 0,
                                   "y": 0,
                                   "width": 24,
-                                  "height": 3,
+                                  "height": 4,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-109"
@@ -18082,7 +18174,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 3,
+                                  "y": 4,
                                   "width": 16,
                                   "height": 8,
                                   "element": {
@@ -18095,7 +18187,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 16,
-                                  "y": 3,
+                                  "y": 4,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -18108,7 +18200,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 11,
+                                  "y": 12,
                                   "width": 16,
                                   "height": 8,
                                   "element": {
@@ -18121,7 +18213,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 16,
-                                  "y": 11,
+                                  "y": 12,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -18134,7 +18226,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 19,
+                                  "y": 20,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -18147,7 +18239,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 8,
-                                  "y": 19,
+                                  "y": 20,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -18160,7 +18252,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 16,
-                                  "y": 19,
+                                  "y": 20,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -18173,7 +18265,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 27,
+                                  "y": 28,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -18186,7 +18278,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 8,
-                                  "y": 27,
+                                  "y": 28,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18199,7 +18291,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 35,
+                                  "y": 36,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18212,7 +18304,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 35,
+                                  "y": 36,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18225,7 +18317,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 43,
+                                  "y": 44,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18238,7 +18330,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 51,
+                                  "y": 52,
                                   "width": 24,
                                   "height": 7,
                                   "element": {
@@ -18426,6 +18518,19 @@
                                   "x": 0,
                                   "y": 8,
                                   "width": 24,
+                                  "height": 6,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1041"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 14,
+                                  "width": 24,
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
@@ -18437,7 +18542,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 15,
+                                  "y": 21,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18450,7 +18555,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 15,
+                                  "y": 21,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18463,7 +18568,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 23,
+                                  "y": 29,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18476,7 +18581,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 23,
+                                  "y": 29,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
