@@ -258,7 +258,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 
 	servicesByStatus := map[string]int64{}
 	statusPoints := make([]telemetry.GaugePoint, 0, len(raws))
-	issuesByClassStatus := map[[2]string]int64{}
+	issuesByKey := map[issueKey]int64{}
 	seenIssues := map[string]bool{}
 	var postCandidates []postCandidate
 	var teamsIssues []issue
@@ -283,7 +283,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 				continue
 			}
 			seenIssues[is.ID] = true
-			issuesByClassStatus[[2]string{is.Classification, is.Status}]++
+			issuesByKey[issueKey{is.Classification, is.Status, is.Service, resolvedLabel(is)}]++
 			if !is.resolved() {
 				e.LogEvent(issueTwin(is))
 			}
@@ -313,18 +313,42 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 	e.GaugeSnapshot(metricServicesTotal, "{service}", "Count of M365 services in each health status.", servicePoints)
 	e.GaugeSnapshot(metricStatus, "1", "Numeric health-status enum per M365 service (0 = operational, higher = worse, -1 = unmapped). See docs/signals.md.", statusPoints)
 
-	issuePoints := make([]telemetry.GaugePoint, 0, len(issuesByClassStatus))
-	for k, n := range issuesByClassStatus {
+	issuePoints := make([]telemetry.GaugePoint, 0, len(issuesByKey))
+	for k, n := range issuesByKey {
 		issuePoints = append(issuePoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{semconv.AttrClassification: k[0], semconv.AttrStatus: k[1]},
+			Attrs: telemetry.Attrs{
+				semconv.AttrClassification: k.classification,
+				semconv.AttrStatus:         k.status,
+				semconv.AttrService:        k.service,
+				semconv.AttrIsResolved:     k.resolved,
+			},
 		})
 	}
-	e.GaugeSnapshot(metricIssuesTotal, "{issue}", "Count of M365 service-health issues by classification and status.", issuePoints)
+	e.GaugeSnapshot(metricIssuesTotal, "{issue}", "Count of M365 service-health issues by classification, status, service and resolved state.", issuePoints)
 	if c.teamsLifecycle && c.store != nil && c.tenantID != "" {
 		return c.processTeamsLifecycle(e, outcomes, teamsIssues)
 	}
 	return nil
+}
+
+// issueKey is the m365.service_health.issues.total series key. Cardinality is
+// bounded by the M365 service list (tens) x classification x status x resolved
+// state; the issue id and title never become labels.
+type issueKey struct{ classification, status, service, resolved string }
+
+// resolvedLabel is the is_resolved label value. An absent isResolved is
+// "unknown", never "false": absent is not false, and an alert on
+// is_resolved="false" must not count an issue whose state was not reported.
+// (The log twin keeps the legacy resolved() treatment.)
+func resolvedLabel(is issue) string {
+	if is.IsResolved == nil {
+		return "unknown"
+	}
+	if *is.IsResolved {
+		return "true"
+	}
+	return "false"
 }
 
 // issueTwin renders the shared service-health issue event. For an open issue

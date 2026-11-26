@@ -18,6 +18,7 @@ metadata:
 spec:
   title: "Microsoft Teams service incident is open"
   paused: true
+  for: "10m0s"
   noDataState: "Ok"
   execErrState: "Error"
   trigger:
@@ -29,26 +30,25 @@ spec:
     pipeline: "graph2otel"
   annotations:
     summary: "Tenant {{ $labels.tenant_id }}: Microsoft Teams service incident is open."
-    description: "A Teams incident was observed open in the last 30m with no confirmed resolution twin for that tenant and issue in the last 7d. Advisories do not count. Silence is unknown, not a confirmed closure. Send to an informational receiver, not an on-call pager."
-    tuning_required: "Verify open and resolution twins on the Teams profile, validate the Loki query and set a separate informational route before enabling."
+    description: "At least one Microsoft Teams incident is unresolved in the latest service-health poll (is_resolved from the API). Advisories do not count. The gauge is a snapshot each poll, so the alert clears when Microsoft marks the issue resolved. Send to an informational receiver, not an on-call pager."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-teams-service-incident-open"
     __dashboardUid__: "graph2otel"
-    __panelId__: "381"
-    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=381"
+    __panelId__: "379"
+    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=379"
   expressions:
     A:
       model:
-        refId: "A"
         datasource:
-          type: "loki"
-          uid: "grafanacloud-logs"
-        expr: "count by (tenant_id) ((sum by (tenant_id, id) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id!=`` | id!=`` | service=`Microsoft Teams` | classification=`incident` | is_resolved=`false` [30m]))) unless on (tenant_id, id) (sum by (tenant_id, id) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id!=`` | id!=`` | service=`Microsoft Teams` | classification=`incident` | is_resolved=`true` [7d])))) or on (tenant_id) (0 * count by (tenant_id) (sum by (tenant_id, id) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id!=`` | id!=`` | service=`Microsoft Teams` | classification=`incident` | is_resolved=`true` [7d]))))"
-        queryType: "instant"
+          type: "prometheus"
+          uid: "grafanacloud-prom"
         editorMode: "code"
+        expr: "sum by (tenant_id) (m365_service_health_issues_total{tenant_id!=\"\",service=\"Microsoft Teams\",classification=\"incident\",is_resolved=\"false\"})"
+        instant: true
+        range: false
         intervalMs: 1000
         maxDataPoints: 43200
-      datasourceUID: "grafanacloud-logs"
-      queryType: "instant"
+        refId: "A"
+      datasourceUID: "grafanacloud-prom"
       relativeTimeRange:
         from: "1h0m0s"
         to: "0s"

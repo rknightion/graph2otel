@@ -105,14 +105,56 @@ class TestPipelineShape(unittest.TestCase):
             self.assertEqual(ref_ids, ["A", "B", "C"], r["uid"])
             self.assertEqual(r["condition"], "C", r["uid"])
             a, b, c = r["data"]
-            ds = r["uid"] in {"g2o-teams-call-records-stale", "g2o-teams-service-incident-open"}
-            self.assertEqual(a["model"]["datasource"]["type"],
-                             "loki" if ds else "prometheus", r["uid"])
+            self.assertEqual(a["model"]["datasource"]["type"], "prometheus", r["uid"])
             self.assertEqual(b["model"]["type"], "reduce", r["uid"])
             self.assertEqual(b["model"]["expression"], "A", r["uid"])
             self.assertEqual(c["model"]["type"], "threshold", r["uid"])
             self.assertEqual(c["model"]["expression"], "B", r["uid"])
 
+
+
+class TestTeamsServiceIncidentRule(unittest.TestCase):
+    def test_is_prometheus_backed_on_the_resolved_state_gauge(self):
+        rule = next(r for r in build_rules.RULES if r["uid"] == "g2o-teams-service-incident-open")
+        query = rule["data"][0]
+        self.assertEqual(query["model"]["datasource"]["type"], "prometheus")
+        expr = query["model"]["expr"]
+        self.assertIn("m365_service_health_issues_total", expr)
+        for matcher in ('service="Microsoft Teams"', 'classification="incident"', 'is_resolved="false"'):
+            self.assertIn(matcher, expr)
+        self.assertIn("sum by (tenant_id)", expr)
+        self.assertNotIn("count_over_time", expr)
+        self.assertEqual(rule["data"][2]["model"]["conditions"][0]["evaluator"]["params"], [0])
+        self.assertEqual(rule["data"][2]["model"]["conditions"][0]["evaluator"]["type"], "gt")
+        self.assertEqual(rule["labels"]["severity"], "info")
+        self.assertEqual(rule["labels"]["category"], "teams-service-incident")
+
+
+class TestTeamsCallRecordsStale(unittest.TestCase):
+    """The stale-arrival rule is PromQL over the teams.calls counter."""
+
+    def setUp(self):
+        self.rule = next(r for r in build_rules.RULES
+                         if r["uid"] == "g2o-teams-call-records-stale")
+        self.expr = self.rule["data"][0]["model"]["expr"]
+
+    def test_is_prometheus_backed_over_the_calls_counter(self):
+        self.assertEqual(self.rule["data"][0]["model"]["datasource"]["type"], "prometheus")
+        self.assertIn(build_rules._m("teams.calls"), self.expr)
+        self.assertNotIn("count_over_time", self.expr)
+
+    def test_expression_has_the_12h_4h_and_gates(self):
+        self.assertIn("[12h]", self.expr)
+        self.assertIn("[4h]", self.expr)
+        self.assertIn("unless on (tenant_id)", self.expr)
+        for gate in ("day_of_week() >= 1", "day_of_week() <= 5",
+                     "hour() >= 12", "hour() < 18"):
+            self.assertIn(gate, self.expr)
+
+    def test_identity_survives(self):
+        self.assertEqual(self.rule["labels"]["severity"], "warning")
+        self.assertEqual(self.rule["labels"]["category"], "teams-collection")
+        self.assertIn("arrival", self.rule["annotations"]["description"])
 
 
 class TestEvaluatorErrorState(unittest.TestCase):
@@ -931,14 +973,6 @@ class TestAppPlatformProjection(unittest.TestCase):
         for ref in ("B", "C"):
             self.assertNotIn("datasourceUID", exprs[ref])
             self.assertNotIn("relativeTimeRange", exprs[ref])
-
-    def test_instant_loki_query_mode_matches_app_platform_readback(self):
-        """Grafana returns the explicit non-default mode outside the model too."""
-        for uid in ("g2o-teams-call-records-stale", "g2o-teams-service-incident-open"):
-            with self.subTest(uid=uid):
-                query = self._project(uid)["spec"]["expressions"]["A"]
-                self.assertEqual(query["queryType"], "instant")
-                self.assertEqual(query["model"]["queryType"], query["queryType"])
 
     def test_group_interval_becomes_a_per_rule_trigger(self):
         self.assertEqual(self._project()["spec"]["trigger"], {"interval": "5m"})

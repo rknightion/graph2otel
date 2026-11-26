@@ -92,15 +92,37 @@ func TestCollectEmitsBoundedServiceAndIssueGauges(t *testing.T) {
 	}
 
 	// issues.total{classification,status}: both issues counted (resolved included).
-	issues := map[[2]string]float64{}
+	issues := map[[4]string]float64{}
 	for _, p := range rec.MetricPoints(metricIssuesTotal) {
-		issues[[2]string{p.Attrs["classification"], p.Attrs["status"]}] = p.Value
+		issues[[4]string{p.Attrs["classification"], p.Attrs["status"], p.Attrs["service"], p.Attrs["is_resolved"]}] = p.Value
 	}
-	if issues[[2]string{"incident", "serviceDegradation"}] != 1 {
-		t.Errorf("issues.total{incident,serviceDegradation} = %v, want 1", issues[[2]string{"incident", "serviceDegradation"}])
+	open := [4]string{"incident", "serviceDegradation", "Exchange Online", "false"}
+	closed := [4]string{"advisory", "serviceRestored", "Exchange Online", "true"}
+	if issues[open] != 1 {
+		t.Errorf("issues.total%v = %v, want 1", open, issues[open])
 	}
-	if issues[[2]string{"advisory", "serviceRestored"}] != 1 {
-		t.Errorf("issues.total{advisory,serviceRestored} = %v, want 1", issues[[2]string{"advisory", "serviceRestored"}])
+	if issues[closed] != 1 {
+		t.Errorf("issues.total%v = %v, want 1", closed, issues[closed])
+	}
+	if len(issues) != 2 {
+		t.Errorf("issues.total series = %v, want exactly the two fixture keys", issues)
+	}
+}
+
+// An issue with no isResolved on the wire is "unknown", never "false": the
+// Teams incident alert counts is_resolved="false" and must not count an issue
+// whose state Microsoft did not report.
+func TestIssuesTotalAbsentIsResolvedIsUnknown(t *testing.T) {
+	body := `{"value":[{"id":"T","service":"Microsoft Teams","status":"serviceOperational","issues":[
+	  {"id":"TM1","classification":"incident","status":"investigating","service":"Microsoft Teams"}]}]}`
+	c := New(&fakeGraph{bodies: map[string]string{overviewsURL: body}}, nil, "", nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	pts := rec.MetricPoints(metricIssuesTotal)
+	if len(pts) != 1 || pts[0].Attrs["is_resolved"] != "unknown" || pts[0].Attrs["service"] != "Microsoft Teams" {
+		t.Errorf("points = %+v, want one series with service=Microsoft Teams is_resolved=unknown", pts)
 	}
 }
 
@@ -124,7 +146,7 @@ func TestMetricsCarryNoPerIssueAttribute(t *testing.T) {
 	allowed := map[string]map[string]bool{
 		metricServicesTotal: {"status": true, "tenant_id": true},
 		metricStatus:        {"service": true, "tenant_id": true},
-		metricIssuesTotal:   {"classification": true, "status": true, "tenant_id": true},
+		metricIssuesTotal:   {"classification": true, "status": true, "service": true, "is_resolved": true, "tenant_id": true},
 	}
 	for name, ok := range allowed {
 		for _, p := range rec.MetricPoints(name) {

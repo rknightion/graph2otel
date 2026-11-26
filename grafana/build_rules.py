@@ -914,8 +914,9 @@ _TEAMS_TENANT = 'tenant_id!=""'
 
 
 def _teams_growth(metric, dims, matchers, window):
+    selector = ",".join(part for part in (_TEAMS_TENANT, matchers) if part)
     return (f'sum by ({dims}) (increase({_m(metric)}'
-            f'{{{_TEAMS_TENANT},{matchers}}}[{window}]))')
+            f'{{{selector}}}[{window}]))')
 
 
 def _teams_share(numerator, eligible, dims, minimum):
@@ -924,65 +925,48 @@ def _teams_share(numerator, eligible, dims, minimum):
             f'and on ({dims}) (({eligible}) >= {minimum})')
 
 
-def _teams_metric(suffix, title, expr, op, limit, category, description, scope=""):
+def _teams_metric(suffix, title, expr, op, limit, category, description, scope="",
+                  severity="warning"):
     where = "Tenant {{ $labels.tenant_id }}" + scope
     return _alert(
         f"g2o-teams-{suffix}", title, expr, op, [limit], "10m",
-        {"source": "m365", "severity": "warning", "category": category},
+        {"source": "m365", "severity": severity, "category": category},
         f"{where}: {title}.", description, True, instant=True,
     )
 
 
-def _teams_loki(suffix, title, expr, category, severity, description, tuning, hold):
-    rule = _loki_alert(
-        f"g2o-teams-{suffix}", title, expr, "gt", [0],
-        {"source": "m365", "severity": severity, "category": category},
-        f"Tenant {{{{ $labels.tenant_id }}}}: {title}.", description, tuning,
-    )
-    query = rule["data"][0]
-    query["queryType"] = query["model"]["queryType"] = "instant"
-    rule["for"] = hold
-    return rule
-
-
-def _teams_log_count(selector, dims, window):
-    return f"sum by ({dims}) (count_over_time({selector} [{window}]))"
-
-
 def _teams_stale():
-    calls = _sel("teams.call", f("tenant_id", "ne", ""), by="tenant_id")
-    # With a four-hour horizon, start evaluating four hours into the 08-18 UTC
-    # workday. The long leg supplies positive evidence that this tenant had
-    # records; the short leg excludes tenants whose event time is still fresh.
-    # LogQL has no dateInZone formatter. Use UTC epoch hours and offset
-    # by four because epoch day zero is Thursday (Sunday = 0).
-    work_hours = (' | label_format teams_work_hour=`{{ $h := div (unixEpoch (now)) 3600 }}'
-                  '{{ mod (add (div $h 24) 4) 7 }}-{{ mod $h 24 }}`'
-                  ' | teams_work_hour=~`[1-5]-1[2-7]`'
-                  ' | drop teams_work_hour')
-    seen = _teams_log_count(calls + work_hours, "tenant_id", "12h")
-    fresh = _teams_log_count(calls, "tenant_id", "4h")
-    return f"({seen}) unless on (tenant_id) ({fresh})"
+    # Arrival-based: teams_calls_total increments when the collector first sees
+    # a complete call version. The long leg is positive evidence that this
+    # tenant had arrivals; the short leg removes tenants with a recent one. An
+    # arrival shows as either a positive increase on an existing series, or a
+    # series that exists now and did not exist one window ago: a new label
+    # combination is exported first with its first value, so increase() reads
+    # it as 0. An existing counter that has stopped moving also reads 0, which
+    # is why each leg keeps only positive evidence. A tenant whose counter
+    # series never existed yields no result at all, so it stays quiet. The gate
+    # is UTC Monday to Friday, 12:00 up to 18:00 (four hours into an 08:00
+    # workday).
+    calls = f'{_m("teams.calls")}{{{_TEAMS_TENANT}}}'
+
+    def arrived(window):
+        grown = _teams_growth("teams.calls", "tenant_id", "", window)
+        created = f"count by (tenant_id) ({calls} unless {calls} offset {window})"
+        return f"(({grown}) > 0 or {created})"
+
+    gate = ("day_of_week() >= 1 and day_of_week() <= 5 "
+            "and hour() >= 12 and hour() < 18")
+    return (f"({arrived('12h')} unless on (tenant_id) {arrived('4h')}) "
+            f"and on () ({gate})")
 
 
 def _teams_open_incidents():
-    # Opens are repeated snapshots at poll time; closures are one-shot and
-    # backdated to the actual end. An explicit closure wins even if an old open
-    # snapshot arrived recently, and closes only the matching tenant and id.
-    # Do not filter resolutions out of the data from which state is computed.
-    dims = "tenant_id, id"
-    incident = (f("tenant_id", "ne", ""), f("id", "ne", ""),
-                f("service", "eq", "Microsoft Teams"), f("classification", "eq", "incident"))
-
-    def count_state(resolved, window):
-        selector = _sel("m365.service_health_issue", *incident,
-                        f("is_resolved", "eq", resolved), by=dims)
-        return _teams_log_count(selector, dims, window)
-
-    opens = count_state("false", "30m")
-    closed = count_state("true", "7d")
-    return (f"count by (tenant_id) (({opens}) unless on ({dims}) ({closed})) "
-            f"or on (tenant_id) (0 * count by (tenant_id) ({closed}))")
+    # A gauge snapshot each poll: the API's own isResolved decides, so there is
+    # no closure lookup. An issue with an absent isResolved is labelled
+    # "unknown" by the collector and is not counted here.
+    return (f'sum by (tenant_id) ({_m("m365.service_health.issues.total")}'
+            f'{{{_TEAMS_TENANT},service="Microsoft Teams",classification="incident",'
+            f'is_resolved="false"}})')
 
 
 def _teams_rules():
@@ -1046,26 +1030,25 @@ def _teams_rules():
             "More than 10% of at least 20 attempts in 30m failed with SIP 5xx on a named "
             "trunk. Other SIP error classes do not count as 5xx evidence.", trunk_scope,
         ),
-        _teams_loki(
-            "call-records-stale", "Teams call-record event time is stale", _teams_stale(),
-            "teams-collection", "warning",
-            "The newest observed call start is over 4h old, but calls were seen in the "
-            "last 12h. Checks weekdays from 12:00 to 18:00 UTC (four hours into the "
-            "08:00 to 18:00 UTC workday, no daylight-saving shift). Never-seen, missing "
-            "or very quiet traffic is not enough evidence. A quiet afternoon or delayed "
-            "source event time can still look stale; check collector health separately.",
-            "Validate the Loki query, expected traffic, event delay and business hours "
-            "for your tenant before enabling.", "15m",
+        _teams_metric(
+            "call-records-stale", "Teams call-record arrival is stale", _teams_stale(),
+            "gt", 0, "teams-collection",
+            "No new call record has arrived in the last 4h, but calls arrived in the "
+            "last 12h. Measures arrival at collection time (first complete call "
+            "version), not call start time, so late source records no longer look "
+            "stale. Checks weekdays from 12:00 to 18:00 UTC (four hours into the "
+            "08:00 to 18:00 UTC workday, no daylight-saving shift). A tenant whose "
+            "counter never existed, or had no arrivals in 12h, does not alert. A quiet "
+            "afternoon can still look stale; check collector health separately.",
         ),
-        _teams_loki(
+        _teams_metric(
             "service-incident-open", "Microsoft Teams service incident is open",
-            _teams_open_incidents(), "teams-service-incident", "info",
-            "A Teams incident was observed open in the last 30m with no confirmed "
-            "resolution twin for that tenant and issue in the last 7d. Advisories do not "
-            "count. Silence is unknown, not a confirmed closure. Send to an informational "
-            "receiver, not an on-call pager.",
-            "Verify open and resolution twins on the Teams profile, validate the Loki "
-            "query and set a separate informational route before enabling.", "0s",
+            _teams_open_incidents(), "gt", 0, "teams-service-incident",
+            "At least one Microsoft Teams incident is unresolved in the latest "
+            "service-health poll (is_resolved from the API). Advisories do not count. "
+            "The gauge is a snapshot each poll, so the alert clears when Microsoft "
+            "marks the issue resolved. Send to an informational receiver, not an "
+            "on-call pager.", severity="info",
         ),
     ]
 
@@ -1868,10 +1851,6 @@ def to_app_platform(rule: dict, group: str, interval: str, index: int) -> dict:
         entry = {"model": model}
         if node.get("datasourceUid") and node["datasourceUid"] != EXPR_UID:
             entry["datasourceUID"] = node["datasourceUid"]
-            # Grafana echoes the explicit Loki instant mode on the expression
-            # as well as in its model. Preserve it so strict read-back matches.
-            if node.get("queryType") == "instant":
-                entry["queryType"] = node["queryType"]
             window = node.get("relativeTimeRange") or {}
             entry["relativeTimeRange"] = {
                 "from": go_duration(window.get("from", 0)),
@@ -2274,8 +2253,8 @@ DASHBOARD_TARGETS = {
         ("M365", "Direct Routing network effectiveness by trunk (0 to 1)"),
     "g2o-teams-trunk-sip-5xx-high":
         ("M365", "Direct Routing attempt rate by trunk, outcome and SIP class"),
-    "g2o-teams-call-records-stale": ("M365", "Teams calls by detail version"),
-    "g2o-teams-service-incident-open": ("M365", "Service health status ladder"),
+    "g2o-teams-call-records-stale": ("M365", "Call rate by initial health"),
+    "g2o-teams-service-incident-open": ("M365", "Service health issues total"),
     "g2o-detect-privileged-directory-change":
         ("Entra", "Top directory audit activities"),
     "g2o-detect-security-alert-unresolved":
@@ -2379,9 +2358,6 @@ def resolve_target(man: dict, tab: str, panel_title: str) -> tuple:
 # is not a gate. An unused entry here fails too, so a waiver cannot outlive the
 # panel that justified it.
 SIGNAL_MATCH_WAIVERS = {
-    "g2o-teams-service-incident-open":
-        "the existing M365 status ladder shows the service-level context; per-issue "
-        "lifecycle twins are in Loki and are not plotted on the merged board",
     "g2o-detect-security-alert-unresolved":
         "no panel plots the entra.security_alert stream; the Defender alert log "
         "panel (defender.alert) is the nearest investigation surface, and the "
