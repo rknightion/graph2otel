@@ -11409,7 +11409,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -11446,6 +11454,78 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "trunk_fqdn"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Trunk fqdn"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "effective_attempts"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Effective attempts"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "poll_attempts"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Poll attempts"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "source_success_sip_4xx"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Source success SIP 4xx"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -11522,7 +11602,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -11559,6 +11647,210 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "connectivity_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Connectivity type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Duration"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_duration_source"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call duration source"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "usage_country_code"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Usage country code"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_country_code"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Tenant country code"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "connection_charge"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Connection charge"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "currency"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Currency"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Start time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -11635,7 +11927,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -11672,6 +11972,186 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "trunk_fqdn"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Trunk fqdn"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "successful_call"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Successful call"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "final_sip_code"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Final SIP code"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "final_sip_code_phrase"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Final SIP code phrase"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Duration"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Start time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "invite_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Invite time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "invite_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "failure_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Failure time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "failure_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -11970,7 +12450,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -12031,6 +12519,214 @@
                       {
                         "id": "unit",
                         "value": "percentunit"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "queue"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Queue"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "known_result_legs"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Known result legs"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "known_result_legs"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "answered_legs"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Answered legs"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "abandoned_legs"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Abandoned legs"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "answer_share"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Answer share"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "abandon_share"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Abandon share"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -12475,7 +13171,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -12512,6 +13216,310 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "queue"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Queue"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "dialog_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Dialog ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "result"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Result"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "result"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_final_state_action"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue final state action"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue duration"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue agent count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "agent_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Agent name"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Start date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -12588,7 +13596,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -12625,6 +13641,310 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "queue"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Queue"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "dialog_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Dialog ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "result"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Result"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "result"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_final_state_action"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue final state action"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue duration"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue agent count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "agent_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Agent name"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Start date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -12701,7 +14021,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -12738,6 +14066,274 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Auto attendant"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Auto attendant identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "result"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Result"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "result"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_transfer_action"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Auto attendant transfer action"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_call_flow"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Auto attendant call flow"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_chain_duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Auto attendant chain duration"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_chain_duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Start date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -13183,7 +14779,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 }
               },
               "fieldConfig": {
@@ -13201,7 +14798,192 @@
                     ]
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "capability"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Capability"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "number_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Number type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "assignment_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Assignment status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "assignment_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "activation_state"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Activation state"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -13275,7 +15057,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 }
               },
               "fieldConfig": {
@@ -13293,7 +15076,56 @@
                     ]
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "account_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Account type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "enterprise_voice_enabled"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Enterprise voice enabled"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -13367,7 +15199,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 }
               },
               "fieldConfig": {
@@ -13385,7 +15218,44 @@
                     ]
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "policy_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Policy type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -13459,7 +15329,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 }
               },
               "fieldConfig": {
@@ -13477,7 +15348,32 @@
                     ]
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -13730,7 +15626,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -13767,6 +15671,250 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "telephone_number"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Telephone number"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "number_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Number type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "assignment_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Assignment status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "assignment_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "activation_state"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Activation state"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "capabilities"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Capabilities"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "city"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "City"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "country_code"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Country code"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "number_source"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Number source"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "snapshot_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Snapshot ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -13843,7 +15991,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -13880,6 +16036,138 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "User principal name"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "account_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Account type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "enterprise_voice_enabled"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Enterprise voice enabled"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "feature_types"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Feature types"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Modified date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "effective_policy_assignments"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Effective policy assignments"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "telephone_numbers"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Telephone numbers"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "snapshot_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Snapshot ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -13956,7 +16244,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -13993,6 +16289,78 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "collector"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Collector"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "snapshot_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Snapshot ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "entity_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Entity count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "entity_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -14097,7 +16465,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -14134,6 +16510,374 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "device_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Device ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "manufacturer"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Manufacturer"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "model"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Model"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "health_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Health status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "health_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "connection_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Connection status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "connection_status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "software_update_readout"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Software update readout"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "connection_last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Connection last modified date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "connection_last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last modified date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
