@@ -10069,7 +10069,15 @@
                     "displayName": "Last observed",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -10135,6 +10143,18 @@
                             "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
                       }
                     ]
                   }
@@ -10233,7 +10253,15 @@
                     "displayName": "Last observed",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -10299,6 +10327,18 @@
                             "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
                       }
                     ]
                   }
@@ -10397,7 +10437,15 @@
                     "displayName": "Last observed",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -10463,6 +10511,18 @@
                             "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
                       }
                     ]
                   }
@@ -10539,7 +10599,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -10593,6 +10661,432 @@
                             "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Users",
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Users",
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller UPN"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee UPN"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "version"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Version"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Stream ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "direction"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Direction"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_identity_scope"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller scope"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_identity_scope"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee scope"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_platform"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller platform"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_transport_protocol"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller transport"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_transport_protocol"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee transport"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Stream health"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
                       }
                     ]
                   }
@@ -10669,7 +11163,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -10723,6 +11225,343 @@
                             "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "organizer_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Users",
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "organizer_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Organiser UPN"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "version"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Version"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call health"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Duration"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
                       }
                     ]
                   }
@@ -18420,6 +19259,889 @@
             }
           }
         }
+      },
+      "panel-4001": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4001,
+          "title": "Top caller UPNs",
+          "description": "The ten caller UPNs with the most teams.call_stream records over the range. Click a bar to select the user.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, caller_user_principal_name) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | tenant_id!=`` | caller_user_principal_name!=`` | keep tenant_id, caller_user_principal_name [$__range]))",
+                        "editorMode": "code",
+                        "queryType": "instant",
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "labelsToFields",
+                  "spec": {
+                    "options": {
+                      "mode": "columns"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "orientation": "horizontal",
+                "xField": "caller_user_principal_name",
+                "showValue": "auto",
+                "legend": {
+                  "showLegend": false,
+                  "placement": "bottom",
+                  "displayMode": "list"
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "barWidth": 0.8,
+                "groupWidth": 0.7,
+                "xTickLabelRotation": 0,
+                "xTickLabelMaxLength": 40
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short",
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "No data yet. No caller UPNs in range.",
+                  "custom": {},
+                  "links": [
+                    {
+                      "title": "Select this user",
+                      "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__data.fields.caller_user_principal_name:percentencode}"
+                    }
+                  ]
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Records"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller UPN"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4002": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4002,
+          "title": "Top callee UPNs",
+          "description": "The ten callee UPNs with the most teams.call_stream records over the range. Click a bar to select the user.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, callee_user_principal_name) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | tenant_id!=`` | callee_user_principal_name!=`` | keep tenant_id, callee_user_principal_name [$__range]))",
+                        "editorMode": "code",
+                        "queryType": "instant",
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "labelsToFields",
+                  "spec": {
+                    "options": {
+                      "mode": "columns"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "orientation": "horizontal",
+                "xField": "callee_user_principal_name",
+                "showValue": "auto",
+                "legend": {
+                  "showLegend": false,
+                  "placement": "bottom",
+                  "displayMode": "list"
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "barWidth": 0.8,
+                "groupWidth": 0.7,
+                "xTickLabelRotation": 0,
+                "xTickLabelMaxLength": 40
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short",
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "No data yet. No callee UPNs in range.",
+                  "custom": {},
+                  "links": [
+                    {
+                      "title": "Select this user",
+                      "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__data.fields.callee_user_principal_name:percentencode}"
+                    }
+                  ]
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Records"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee UPN"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4003": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4003,
+          "title": "Top organiser UPNs",
+          "description": "The ten organiser UPNs with the most teams.call records over the range. Click a bar to select the user.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, organizer_user_principal_name) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call` | tenant_id=~\"$tenant\" | tenant_id!=`` | organizer_user_principal_name!=`` | keep tenant_id, organizer_user_principal_name [$__range]))",
+                        "editorMode": "code",
+                        "queryType": "instant",
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "labelsToFields",
+                  "spec": {
+                    "options": {
+                      "mode": "columns"
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "barchart",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "orientation": "horizontal",
+                "xField": "organizer_user_principal_name",
+                "showValue": "auto",
+                "legend": {
+                  "showLegend": false,
+                  "placement": "bottom",
+                  "displayMode": "list"
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "barWidth": 0.8,
+                "groupWidth": 0.7,
+                "xTickLabelRotation": 0,
+                "xTickLabelMaxLength": 40
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short",
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "noValue": "No data yet. No organiser UPNs in range.",
+                  "custom": {},
+                  "links": [
+                    {
+                      "title": "Select this user",
+                      "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__data.fields.organizer_user_principal_name:percentencode}"
+                    }
+                  ]
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Records"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "organizer_user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Organiser UPN"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4004": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4004,
+          "title": "Selected user's streams by health",
+          "description": "Directional stream records where the user is the caller or callee, by stream_health.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (stream_health) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | keep stream_health [$__auto]))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{stream_health}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "showLegend": true,
+                  "placement": "right",
+                  "displayMode": "table",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short",
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 80,
+                    "stacking": {
+                      "mode": "normal",
+                      "group": "A"
+                    }
+                  },
+                  "noValue": "No data yet. No streams for this user in range."
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "poor"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "red"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "good"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "unknown"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "gray"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4005": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4005,
+          "title": "Selected user's media mix",
+          "description": "Stream records by media for the selected user over the range.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (media) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | keep media [$__range]))",
+                        "editorMode": "code",
+                        "queryType": "instant",
+                        "legendFormat": "{{media}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "piechart",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "pieType": "pie",
+                "legend": {
+                  "showLegend": true,
+                  "placement": "right",
+                  "displayMode": "table",
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short",
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {},
+                  "noValue": "No data yet. No streams for this user in range."
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-4006": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4006,
+          "title": "Selected user's poor-stream share",
+          "description": "Share of the user's directional stream records classified poor over the range. Colour meaning: graph2otel triage bands.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum(count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | stream_health=`poor` | keep stream_health [$__range])) / sum(count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | keep stream_health [$__range]))",
+                        "editorMode": "code",
+                        "queryType": "instant"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.02
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.05
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.1
+                      }
+                    ]
+                  },
+                  "unit": "percentunit",
+                  "decimals": 1,
+                  "min": 0,
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "0%"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-4007": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4007,
+          "title": "Pick a user",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "Pick a user from the charts or tables above, or type an exact UPN in **User UPN**."
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -19644,8 +21366,9 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "",
+                        "title": "Directory",
                         "collapse": false,
+                        "hideHeader": false,
                         "layout": {
                           "kind": "GridLayout",
                           "spec": {
@@ -19668,8 +21391,8 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 4,
-                                  "width": 24,
-                                  "height": 6,
+                                  "width": 8,
+                                  "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-69"
@@ -19679,10 +21402,10 @@
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
-                                  "x": 0,
-                                  "y": 10,
-                                  "width": 24,
-                                  "height": 6,
+                                  "x": 8,
+                                  "y": 4,
+                                  "width": 8,
+                                  "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-70"
@@ -19692,13 +21415,166 @@
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
-                                  "x": 0,
-                                  "y": 16,
-                                  "width": 24,
-                                  "height": 6,
+                                  "x": 16,
+                                  "y": 4,
+                                  "width": 8,
+                                  "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-71"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Top users",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4001"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4002"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 16,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4003"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "",
+                        "collapse": false,
+                        "hideHeader": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 24,
+                                  "height": 3,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4007"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "conditionalRendering": {
+                          "kind": "ConditionalRenderingGroup",
+                          "spec": {
+                            "visibility": "show",
+                            "condition": "and",
+                            "items": [
+                              {
+                                "kind": "ConditionalRenderingVariable",
+                                "spec": {
+                                  "variable": "user",
+                                  "operator": "equals",
+                                  "value": ""
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Selected user",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4004"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 0,
+                                  "width": 6,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4005"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 18,
+                                  "y": 0,
+                                  "width": 6,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4006"
                                   }
                                 }
                               },
@@ -19706,7 +21582,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 22,
+                                  "y": 8,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -19719,7 +21595,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 31,
+                                  "y": 17,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -19731,7 +21607,23 @@
                             ]
                           }
                         },
-                        "hideHeader": true
+                        "conditionalRendering": {
+                          "kind": "ConditionalRenderingGroup",
+                          "spec": {
+                            "visibility": "show",
+                            "condition": "and",
+                            "items": [
+                              {
+                                "kind": "ConditionalRenderingVariable",
+                                "spec": {
+                                  "variable": "user",
+                                  "operator": "notEquals",
+                                  "value": ""
+                                }
+                              }
+                            ]
+                          }
+                        }
                       }
                     }
                   ]
