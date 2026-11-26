@@ -11,7 +11,7 @@ Do not include secrets, tokens, tenant identifiers, or any Entra ID / Intune rec
 
 - [ ] `just check` is green (fmt + lint + tests + vuln scan + generated-asset drift + build)
 - [ ] Tests added/updated (TDD: failing test first), no live network in tests
-- [ ] New `.go` files carry the `SPDX-License-Identifier: AGPL-3.0-only` header
+- [ ] New `.go` files carry the `SPDX-License-Identifier: Apache-2.0` header
 - [ ] Conventional Commit title (`feat:` / `fix:` / `docs:` / … ; `!` for breaking)
 - [ ] No tenant-specific / customer-specific values added to core code or defaults (kept configurable)
 - [ ] Cardinality impact considered for any new metric labels

@@ -307,5 +307,5 @@ outage longer than the initial lookback can also create an unrecoverable gap.
 
 ## License
 
-`graph2otel` is licensed under the GNU Affero General Public License v3.0 only
-(`AGPL-3.0-only`) — see [`LICENSE`](LICENSE).
+`graph2otel` is licensed under the Apache License, Version 2.0 (`Apache-2.0`).
+See [`LICENSE`](LICENSE).
