@@ -309,6 +309,7 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 	defer func() { <-c.slots }()
 
 	start := c.opts.Now()
+	c.baselineThrottleExhausted(e, req.ReportName)
 	throttle := &throttleRetry{sleep: c.opts.Sleep, backoff: &graphclient.Backoff{Base: throttleBackoffBase, Max: throttleBackoffMax}}
 
 	id, err := c.resumeOrCreate(ctx, req, format, throttle)
@@ -604,6 +605,18 @@ func (r *throttleRetry) wait(ctx context.Context, err error) (bool, error) {
 	r.retries++
 	r.spent += d
 	return true, nil
+}
+
+// baselineThrottleExhausted adds 0 to the exhausted counter for reportName, so
+// the series exists at 0 in every process before it can reach 1. A cumulative
+// counter's first exhaustion after a restart would otherwise appear as 1 with the
+// same labels the previous process ended on: the sample sequence 1, 1 holds no
+// reset, so increase() reads it as no event (#711). Starting at 0 makes the
+// next exhaustion a 0 to 1 step that increase() counts. It adds no label.
+func (c *Client) baselineThrottleExhausted(e telemetry.Emitter, reportName string) {
+	e.Counter("graph2otel.export.throttle_exhausted", "{job}",
+		"Intune export calls that ended on a 429 because the in-tick throttle retry budget was exhausted.", 0,
+		telemetry.Attrs{"report_name": reportName})
 }
 
 // noteThrottleExhausted counts an Export call that ended on a 429 because its

@@ -265,8 +265,12 @@ func TestExportCountsExhaustedThrottleBudget(t *testing.T) {
 	rec2 := telemetrytest.New()
 	c2 := New(absorbed, &fakeDownloader{}, Options{Sleep: noSleep(&delays)})
 	_, _ = c2.Export(context.Background(), Request{ReportName: "R"}, rec2.Emitter())
-	if pts := rec2.MetricPoints("graph2otel.export.throttle_exhausted"); len(pts) != 0 {
-		t.Fatalf("absorbed 429 then a 400 counted as exhausted: %+v", pts)
+	// The series exists at 0 (the restart baseline, #711) but never reaches 1.
+	// The recorder sums adds, so the 0 and a later 1 read as one point of 1 in
+	// the first half of this test: the zero is only visible here, where it
+	// stays alone.
+	if pts := rec2.MetricPoints("graph2otel.export.throttle_exhausted"); len(pts) != 1 || pts[0].Value != 0 || pts[0].Attrs["report_name"] != "R" {
+		t.Fatalf("absorbed 429 then a 400: exhausted points = %+v, want one baseline point of 0 for report R", pts)
 	}
 }
 
