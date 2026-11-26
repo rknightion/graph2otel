@@ -7669,7 +7669,6 @@
                         "Returned stream observations": 3
                       },
                       "renameByName": {
-                        "tenant_id": "Tenant",
                         "Returned distinct call IDs": "Call IDs",
                         "Returned distinct call versions": "Call versions",
                         "Returned stream observations": "Stream observations"
@@ -7701,7 +7700,8 @@
                     "desc": true
                   }
                 ],
-                "zebraStriping": true
+                "zebraStriping": true,
+                "enablePagination": true
               },
               "fieldConfig": {
                 "defaults": {
@@ -7742,6 +7742,18 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
                   }
                 ]
               }
@@ -7754,7 +7766,7 @@
         "spec": {
           "id": 55,
           "title": "Call IDs observed at the selected site",
-          "description": "One row per matching stream observation, not a joined call summary.",
+          "description": "One row per matching stream observation at the selected site, newest first.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7851,6 +7863,21 @@
                 },
                 {
                   "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "fields": {},
+                      "sort": [
+                        {
+                          "field": "Time",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
                   "group": "organize",
                   "spec": {
                     "options": {
@@ -7889,12 +7916,6 @@
             "spec": {
               "options": {
                 "showHeader": true,
-                "sortBy": [
-                  {
-                    "displayName": "Version",
-                    "desc": true
-                  }
-                ],
                 "enablePagination": true,
                 "zebraStriping": true
               },
@@ -8015,6 +8036,40 @@
                                 "index": 2
                               }
                             }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Caller site"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Calls",
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Callee site"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Calls",
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -13606,7 +13661,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}}"
+                        "legendFormat": "Unassigned numbers"
                       }
                     }
                   }
@@ -15886,7 +15941,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}}"
+                        "legendFormat": "Microsoft Teams"
                       }
                     }
                   }
@@ -18437,8 +18492,9 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "",
+                        "title": "Summary",
                         "collapse": false,
+                        "hideHeader": false,
                         "layout": {
                           "kind": "GridLayout",
                           "spec": {
@@ -18559,12 +18615,27 @@
                                     "name": "panel-9"
                                   }
                                 }
-                              },
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Trends",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 32,
+                                  "y": 0,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18577,7 +18648,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 32,
+                                  "y": 0,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18590,7 +18661,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 40,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18603,7 +18674,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 40,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18616,7 +18687,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 48,
+                                  "y": 16,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18627,8 +18698,7 @@
                               }
                             ]
                           }
-                        },
-                        "hideHeader": true
+                        }
                       }
                     }
                   ]
@@ -18647,8 +18717,9 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "",
+                        "title": "Summary",
                         "collapse": false,
+                        "hideHeader": false,
                         "layout": {
                           "kind": "GridLayout",
                           "spec": {
@@ -18730,12 +18801,27 @@
                                     "name": "panel-20"
                                   }
                                 }
-                              },
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Stream health",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 15,
+                                  "y": 0,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18748,7 +18834,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 15,
+                                  "y": 0,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18761,111 +18847,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 23,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-23"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 23,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-24"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 31,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-25"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 31,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-26"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 39,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-27"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 39,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-28"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 47,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-29"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 47,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-30"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 55,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18878,7 +18860,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 55,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18886,12 +18868,146 @@
                                     "name": "panel-32"
                                   }
                                 }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Latency, jitter and loss",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-23"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 0,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-24"
+                                  }
+                                }
                               },
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 63,
+                                  "y": 8,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-25"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 8,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-26"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 16,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-27"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 16,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-28"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Feedback and failures",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-29"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 0,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-30"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18902,8 +19018,7 @@
                               }
                             ]
                           }
-                        },
-                        "hideHeader": true
+                        }
                       }
                     }
                   ]
