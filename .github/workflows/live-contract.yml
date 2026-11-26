@@ -1,0 +1,89 @@
+name: live-contract
+
+# Read-only live contract suite (#562): hits the real Microsoft Graph v1.0 endpoints
+# the default collectors depend on and checks the response fields their mappers read.
+# Unit fixtures only catch upstream drift if a fixture happens to match reality; this
+# is the check that does not depend on that.
+#
+# Credentials come from OpenBao, never a stored secret: GitHub OIDC -> tailnet
+# workload identity -> auth/gha JWT role -> KV read (the bao-secret action, the same
+# path grafana-sync.yml uses for its token mint). The job is OFF until the owner has
+# created the role and secret below and set the repository variable
+# LIVE_CONTRACT_ENABLED=true, so merging this workflow without them is a clean skip
+# rather than a red scheduled run.
+#
+#   OpenBao auth/gha role : live-contract-graph2otel (bound to this repository)
+#   KV v2 secret          : secret/graph2otel/live-contract
+#   keys                  : azure_tenant_id, azure_client_id, azure_client_secret
+#                           (a read-only graph2otel-poller identity)
+#
+# The values are exported as masked environment variables named after the keys,
+# uppercased, which is exactly what azidentity.DefaultAzureCredential reads.
+#
+# Deliberately no pull_request or push trigger: PR code must never run in a job that
+# holds tenant credentials.
+
+on:
+  schedule:
+    - cron: '41 5 * * 1' # Mondays 05:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-contract
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: live Graph contract
+    # Off until the OpenBao role and secret exist (see the header).
+    if: github.repository == 'rknightion/graph2otel' && vars.LIVE_CONTRACT_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # exchanged for a tailnet identity and an OpenBao token
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.59.0'
+
+      - name: Read the poller credentials from OpenBao
+        uses: rknightion/.github/.github/actions/bao-secret@3dacb3010d3967dfa9d7619c2d61dc7af14d72dc # v1.34.1
+        with:
+          role: live-contract-graph2otel
+          path: graph2otel/live-contract
+          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+
+      # The test skips with exit 0 when credentials are missing, which is right for a
+      # laptop and wrong here: in this job a skip means nothing was checked. Fail on
+      # any SKIP so a lane that checked nothing cannot report clean.
+      - name: Run the live contract suite
+        run: |
+          set -euo pipefail
+          status=0
+          just test-live 2>&1 | tee "${RUNNER_TEMP}/live-contract.log" || status=$?
+          {
+            echo '### Live Graph contract'
+            echo
+            echo 'Endpoints with an empty collection (shape not checked, not a failure):'
+            echo
+            grep -h 'NOT-APPLICABLE' "${RUNNER_TEMP}/live-contract.log" | sed 's/^ *[a-z_]*\.go:[0-9]*: /- /' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q -e '--- SKIP' "${RUNNER_TEMP}/live-contract.log"; then
+            echo '::error::the live suite skipped: the OpenBao credentials were not exported, so nothing was checked'
+            exit 1
+          fi
+          exit "$status"

@@ -96,6 +96,12 @@ lint: _tools
 test filter=".":
     go test -race -run '{{ filter }}' ./...
 
+# read-only live Graph contract suite (#562); needs AZURE_* credentials, skips with a message without them
+[group('check')]
+[no-exit-message]
+test-live:
+    go test -tags live -count=1 -v -run TestLiveContract ./internal/livecontract
+
 # scan the module graph for known vulnerabilities
 [group('check')]
 [no-exit-message]
