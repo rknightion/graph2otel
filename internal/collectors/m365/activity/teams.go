@@ -134,7 +134,9 @@ func addTeamsParticipantInfo(attrs telemetry.Attrs, info map[string]any) {
 }
 
 // setWireTime emits a zone-less UTC wire time as RFC 3339 UTC, the same way
-// CreationTime is read. An unparseable value is omitted rather than guessed.
+// CreationTime is read. An unparseable value is omitted rather than guessed,
+// and so is the .NET zero date (year one, with or without a zone or fraction):
+// it means unset, as on teams/phonewindow and the other Graph collectors.
 func setWireTime(attrs telemetry.Attrs, attr string, rec map[string]any, key string) {
 	raw := str(rec, key)
 	if raw == "" {
@@ -142,7 +144,9 @@ func setWireTime(attrs telemetry.Attrs, attr string, rec map[string]any, key str
 	}
 	for _, layout := range creationTimeLayouts {
 		if t, err := time.Parse(layout, raw); err == nil {
-			attrs[attr] = t.UTC().Format(time.RFC3339Nano)
+			if t.Year() > 1 {
+				attrs[attr] = t.UTC().Format(time.RFC3339Nano)
+			}
 			return
 		}
 	}

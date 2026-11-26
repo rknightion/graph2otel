@@ -125,6 +125,21 @@ func TestTeamsAuditLiveShapes(t *testing.T) {
 			"teams_attendees_count": "51", "teams_attendees_truncated": "true",
 			"user_agent": "pstn (Teams/)", "teams_participating_tenant_ids": tenant,
 		},
+		// The same missed-call record with its times broken: an unparseable or
+		// .NET zero-date time is omitted, never emitted raw or as year one.
+		"badtime": {
+			"call_id":               "00000000-0000-4000-8000-000000000011",
+			"teams_attendees_count": "1", "user_agent": "pstn (Teams/)", "teams_participating_tenant_ids": tenant,
+		},
+		"zerotime": {
+			"call_id":               "00000000-0000-4000-8000-000000000011",
+			"teams_attendees_count": "1", "user_agent": "pstn (Teams/)", "teams_participating_tenant_ids": tenant,
+		},
+		"zerotimez": {
+			"call_id":               "00000000-0000-4000-8000-000000000011",
+			"teams_leave_time":      "2026-11-25T11:04:47Z",
+			"teams_attendees_count": "1", "user_agent": "pstn (Teams/)", "teams_participating_tenant_ids": tenant,
+		},
 		"00000000-0000-4000-8000-000000000025": {
 			"teams_communication_type": "Team", "teams_members_count": "2",
 			"teams_has_foreign_tenant_users": "false", "teams_has_guest_users": "false", "teams_has_unauthenticated_users": "false",
@@ -164,6 +179,19 @@ func TestTeamsAuditLiveShapes(t *testing.T) {
 	}
 	bounds["Attendees"] = many
 	records = append(records, bounds)
+	for id, times := range map[string][2]any{
+		"badtime":   {"not-a-time", nil},
+		"zerotime":  {"0001-01-01T00:00:00", "0001-01-01T00:00:00.0000000Z"},
+		"zerotimez": {"0001-01-01T00:00:00Z", "2026-11-25T11:04:47"},
+	} {
+		r := maps.Clone(records[4])
+		r["Id"], r["JoinTime"], r["LeaveTime"] = id, times[0], times[1]
+		if times[1] == nil {
+			delete(r, "LeaveTime")
+		}
+		records = append(records, r)
+		attendees[id] = attendees["00000000-0000-4000-8000-000000000010"]
+	}
 	wantBounds := make([]map[string]any, 50)
 	for i := range wantBounds {
 		wantBounds[i] = attendees["00000000-0000-4000-8000-000000000010"][0]
