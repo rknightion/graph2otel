@@ -1,5 +1,87 @@
 # Changelog
 
+## [2.2.0](https://github.com/rknightion/graph2otel/compare/v2.1.1...v2.2.0) (2026-11-26)
+
+
+### Features
+
+* add opt-in teams call record notifications ([#693](https://github.com/rknightion/graph2otel/issues/693)) ([9e6167f](https://github.com/rknightion/graph2otel/commit/9e6167f1f74b288ae85ab7439671af8b1879a0dd))
+* add opt-in teams voice app analytics ([#686](https://github.com/rknightion/graph2otel/issues/686)) ([6026306](https://github.com/rknightion/graph2otel/commit/602630682e2643979c9a8a399de79c34d3ee5a79))
+* add paused teams alert rules ([#700](https://github.com/rknightion/graph2otel/issues/700)) ([352a358](https://github.com/rknightion/graph2otel/commit/352a35809089be384f5a359837ccb3cbc2d7c7f8))
+* add Teams dashboard configuration and topology tables ([#768](https://github.com/rknightion/graph2otel/issues/768)) ([296b427](https://github.com/rknightion/graph2otel/commit/296b4279b1ecc3574a16ad4e308bf9222213efe0))
+* add the opt-in teams_admin transport for Teams admin configuration ([#728](https://github.com/rknightion/graph2otel/issues/728)) ([ed33636](https://github.com/rknightion/graph2otel/commit/ed3363633728ac206ce4d881f123e576d0af48ac))
+* add the teams_admin configuration collectors for attendants, queues, topology and gateways ([#733](https://github.com/rknightion/graph2otel/issues/733)) ([a1c94a6](https://github.com/rknightion/graph2otel/commit/a1c94a65f8eb1c6b5493d992f992efa81b2ee73c))
+* certify completed Teams Phone inventory polls ([#734](https://github.com/rknightion/graph2otel/issues/734)) ([8bb22df](https://github.com/rknightion/graph2otel/commit/8bb22df0e4f28176aa2e220c4ca12c949d71eb50))
+* classify teams stream and call quality ([#687](https://github.com/rknightion/graph2otel/issues/687)) ([2a61dfe](https://github.com/rknightion/graph2otel/commit/2a61dfe651d104af297bb9b5a194e62e513f3fbd))
+* clean up the graph2otel Teams dashboard layout and tables ([#767](https://github.com/rknightion/graph2otel/issues/767)) ([b1cd921](https://github.com/rknightion/graph2otel/commit/b1cd921fee36b8231f2c6d404aafaf34eef90041))
+* collect opt-in Teams SIP device health from Graph ([#742](https://github.com/rknightion/graph2otel/issues/742)) ([87da395](https://github.com/rknightion/graph2otel/commit/87da395271825dee5d5f63a138094013312999fb))
+* collect teams phone inventory ([#695](https://github.com/rknightion/graph2otel/issues/695)) ([d459f28](https://github.com/rknightion/graph2otel/commit/d459f28edc57a441e82e63d8f2b6fc3dcdb32f81))
+* collect teams pstn and direct routing calls ([#682](https://github.com/rknightion/graph2otel/issues/682)) ([1a1a90b](https://github.com/rknightion/graph2otel/commit/1a1a90b22ed8407aee9e158ed4a829b6470645e7))
+* collect teams usage reports ([#689](https://github.com/rknightion/graph2otel/issues/689)) ([a0b17b8](https://github.com/rknightion/graph2otel/commit/a0b17b8dd253815ddfe82b8f88ca2d5960b3af05))
+* collect versioned teams call records ([#685](https://github.com/rknightion/graph2otel/issues/685)) ([c672bfb](https://github.com/rknightion/graph2otel/commit/c672bfbebb8687a626ebe3856db8d788ea751246))
+* distinguish Teams observations from distinct entities ([#757](https://github.com/rknightion/graph2otel/issues/757)) ([60eded3](https://github.com/rknightion/graph2otel/commit/60eded386c0eca7388fdc40ccdd7b4f993dbd0ce))
+* emit confirmed teams incident resolutions ([#681](https://github.com/rknightion/graph2otel/issues/681)) ([b8905e4](https://github.com/rknightion/graph2otel/commit/b8905e4a4c6e608ff4665c3216d2d7365f4d95f8))
+* enrich Teams streams and make user evidence discoverable ([#714](https://github.com/rknightion/graph2otel/issues/714)) ([87c82e1](https://github.com/rknightion/graph2otel/commit/87c82e1c3bad1b6d89d7166ae89b107d8d8f7ea7))
+* enrich teams streams with offline geoip ([#690](https://github.com/rknightion/graph2otel/issues/690)) ([7d3b594](https://github.com/rknightion/graph2otel/commit/7d3b594592db3343f507e690533dfe7f1a570960))
+* export bounded teams call quality metrics ([#692](https://github.com/rknightion/graph2otel/issues/692)) ([b54d430](https://github.com/rknightion/graph2otel/commit/b54d4300e2ecef2dcf3b0770beb8d911c5ac2c9e))
+* export Teams call participant rosters by version ([#717](https://github.com/rknightion/graph2otel/issues/717)) ([67cfb07](https://github.com/rknightion/graph2otel/commit/67cfb07343977d887cc992b09f937a955933916f))
+* extend teams dashboard with quality, voice app, inventory and usage tabs ([#703](https://github.com/rknightion/graph2otel/issues/703)) ([6c0509d](https://github.com/rknightion/graph2otel/commit/6c0509d56257e9de6c58e637c52fdf4e6a9f5002))
+* filter activity audit records by type ([#683](https://github.com/rknightion/graph2otel/issues/683)) ([6db3c50](https://github.com/rknightion/graph2otel/commit/6db3c501bdca4cf176f36a5b3da56213d73d9c21))
+* format the Teams dashboard health and call detail tables ([#766](https://github.com/rknightion/graph2otel/issues/766)) ([cd49ece](https://github.com/rknightion/graph2otel/commit/cd49ece31b2609a7680311cb7881caa4a911d54f))
+* format the Teams dashboard voice tab tables ([#765](https://github.com/rknightion/graph2otel/issues/765)) ([4943b0b](https://github.com/rknightion/graph2otel/commit/4943b0bf4118bb0460fac02ddebbbda3c040806b))
+* generate a separate teams dashboard ([#698](https://github.com/rknightion/graph2otel/issues/698)) ([48993c6](https://github.com/rknightion/graph2otel/commit/48993c67c55bfdcb0305b1b5d5686ded79de152e))
+* link Teams dashboard evidence and shared scope ([#755](https://github.com/rknightion/graph2otel/issues/755)) ([e20ab9e](https://github.com/rknightion/graph2otel/commit/e20ab9e0f440079374e54e7a1d5fd0e8dc4e4fb1))
+* move the Teams stale and incident alerts onto native metrics ([#762](https://github.com/rknightion/graph2otel/issues/762)) ([a63a2a2](https://github.com/rknightion/graph2otel/commit/a63a2a221e35627f24b6e6bf91b1de3ac808a05c))
+* open Teams investigation pivots and show versioned rosters ([#730](https://github.com/rknightion/graph2otel/issues/730)) ([9c36f81](https://github.com/rknightion/graph2otel/commit/9c36f8180defcb7669f77012b10e1e060a66196e))
+* opt in to the seven Teams alerts per stack ([#753](https://github.com/rknightion/graph2otel/issues/753)) ([9fee89a](https://github.com/rknightion/graph2otel/commit/9fee89a50aea73d5b5dae82d7bf0c9bd546b1f81))
+* poll teams pstn, direct routing and voice app analytics every 5 minutes ([#707](https://github.com/rknightion/graph2otel/issues/707)) ([5e3f10f](https://github.com/rknightion/graph2otel/commit/5e3f10ff41dd139027ca62ff0f5146134705ad00))
+* prepare per-tenant teams site enrichment ([#680](https://github.com/rknightion/graph2otel/issues/680)) ([ceef12d](https://github.com/rknightion/graph2otel/commit/ceef12dd377c59ca370e1cce73a84e8014ad5a5e))
+* preserve observed Teams audit team, channel and member detail ([#715](https://github.com/rknightion/graph2otel/issues/715)) ([31ee8cd](https://github.com/rknightion/graph2otel/commit/31ee8cd2a84c04da5c2d534e8906665c7a4ee24e))
+* preserve observed Teams Phone policies and number assignments ([#732](https://github.com/rknightion/graph2otel/issues/732)) ([253c4d8](https://github.com/rknightion/graph2otel/commit/253c4d8a29cb1a9f4109eeb433315747cf3ec807))
+* recognise Teams data streams as non-audio ([#750](https://github.com/rknightion/graph2otel/issues/750)) ([bb3100c](https://github.com/rknightion/graph2otel/commit/bb3100c7ef2af563fb28d45e8e7c8b1c2b8a25b2))
+* redesign the teams dashboard overview, calls and call detail (phase 1) ([#761](https://github.com/rknightion/graph2otel/issues/761)) ([3ae532a](https://github.com/rknightion/graph2otel/commit/3ae532aa2a99ca0ceee372eabf6d424e70082e26))
+* redesign the Teams dashboard users tab ([#764](https://github.com/rknightion/graph2otel/issues/764)) ([079e6a0](https://github.com/rknightion/graph2otel/commit/079e6a0ca5072421a46348932427118dcaea196c))
+* redesign the Teams sites tab (phase 2a) ([#763](https://github.com/rknightion/graph2otel/issues/763)) ([6e78a3b](https://github.com/rknightion/graph2otel/commit/6e78a3bce7d246960663d0338160c2e3dc17efb5))
+* select collector profiles per tenant ([#679](https://github.com/rknightion/graph2otel/issues/679)) ([35e9303](https://github.com/rknightion/graph2otel/commit/35e9303adb46bc4ff7be651a3904fafe5a17ac05))
+* show latest observed Teams apps by team ([#748](https://github.com/rknightion/graph2otel/issues/748)) ([36fec81](https://github.com/rknightion/graph2otel/commit/36fec811dc137f84924716da4232ab6ea3dc0134))
+* show Teams Usage source dates and concealment coverage ([#737](https://github.com/rknightion/graph2otel/issues/737)) ([b1a00c7](https://github.com/rknightion/graph2otel/commit/b1a00c71ce4c35b0f23fe46c7984fbc9ee68ed46))
+
+
+### Bug Fixes
+
+* capture complete Docker smoke logs ([#583](https://github.com/rknightion/graph2otel/issues/583)) ([a174826](https://github.com/rknightion/graph2otel/commit/a174826b3b5eb6c38d8cbac455a1d694fd877cb2))
+* **chart:** regenerate the chart README so helm-docs-check passes ([#554](https://github.com/rknightion/graph2otel/issues/554)) ([bd8c9f0](https://github.com/rknightion/graph2otel/commit/bd8c9f0492336cd529f4f387f1d169e65b752890))
+* **deps:** build with Go 1.27.4 ([#578](https://github.com/rknightion/graph2otel/issues/578)) ([cc63629](https://github.com/rknightion/graph2otel/commit/cc63629cab91166e749fb9058ba872e40f542b08))
+* **deps:** update azure-sdk-for-go monorepo ([#604](https://github.com/rknightion/graph2otel/issues/604)) ([7e03fe7](https://github.com/rknightion/graph2otel/commit/7e03fe7c90a1926ba7a5e70e74008ba741abf916))
+* **deps:** update module github.com/grafana/pyroscope-go to v1.5.0 ([#606](https://github.com/rknightion/graph2otel/issues/606)) ([ac11a13](https://github.com/rknightion/graph2otel/commit/ac11a13f2ddbaabe39679bf7d0ae0ab958c7ca23))
+* **deps:** update module github.com/microsoft/kiota-http-go to v1.7.0 ([#607](https://github.com/rknightion/graph2otel/issues/607)) ([0a3fadb](https://github.com/rknightion/graph2otel/commit/0a3fadb51cde32d5a4b95163ce2738f51d5da5f5))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.106.0 ([#608](https://github.com/rknightion/graph2otel/issues/608)) ([92808d4](https://github.com/rknightion/graph2otel/commit/92808d4bf0c4f613ef38db08ad6d31bd59fac591))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.107.0 ([#622](https://github.com/rknightion/graph2otel/issues/622)) ([003f10f](https://github.com/rknightion/graph2otel/commit/003f10f57673559d49347a1e495779d4ba962029))
+* **deps:** update module github.com/oschwald/maxminddb-golang/v2 to v2.9.1 ([#691](https://github.com/rknightion/graph2otel/issues/691)) ([41c845e](https://github.com/rknightion/graph2otel/commit/41c845e200a16dc6c9f03603148a54c2ddf7435b))
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.6 ([#552](https://github.com/rknightion/graph2otel/issues/552)) ([6eeb790](https://github.com/rknightion/graph2otel/commit/6eeb7909af2add976c636446b1b4281b5363b84e))
+* **deps:** update module go.yaml.in/yaml/v3 to v4 ([#609](https://github.com/rknightion/graph2otel/issues/609)) ([315f093](https://github.com/rknightion/graph2otel/commit/315f0936da83e29582ce6cfa03796be916b5a199))
+* **deps:** update module golang.org/x/net to v0.63.0 ([#694](https://github.com/rknightion/graph2otel/issues/694)) ([9b130d9](https://github.com/rknightion/graph2otel/commit/9b130d9bc289e32af4af86dba8ffbb7af572fa87))
+* **deps:** update the networking dependency in release binaries ([#586](https://github.com/rknightion/graph2otel/issues/586)) ([a930f3d](https://github.com/rknightion/graph2otel/commit/a930f3d62be60e2b16fb02e755b74ca55259ee7d))
+* distinguish Teams event counts from collection estimates ([#716](https://github.com/rknightion/graph2otel/issues/716)) ([d6c122d](https://github.com/rknightion/graph2otel/commit/d6c122d55a2bf3a8b833e516b6ae682b2e796b3f))
+* keep failed direct routing calls by falling back to invite and failure times ([#705](https://github.com/rknightion/graph2otel/issues/705)) ([fcd803f](https://github.com/rknightion/graph2otel/commit/fcd803f4aa237305e00ca53d9118c2deffcf1a76))
+* make Teams call investigation show verdict evidence and coverage ([#727](https://github.com/rknightion/graph2otel/issues/727)) ([eee7027](https://github.com/rknightion/graph2otel/commit/eee7027206ccd8b8e49312a5838bbbf16c0396c2))
+* make Teams site and call discovery scope explicit ([#735](https://github.com/rknightion/graph2otel/issues/735)) ([ef77636](https://github.com/rknightion/graph2otel/commit/ef77636113ff366b7a7fe0bcdf7f72db7559e72c))
+* make the teams dashboard read correctly on sparse call data and add parity panels ([#706](https://github.com/rknightion/graph2otel/issues/706)) ([4ce6105](https://github.com/rknightion/graph2otel/commit/4ce61050521491805326f172445bf1d095a72c51))
+* map Teams browser endpoints to sites by public reflexive IP ([#731](https://github.com/rknightion/graph2otel/issues/731)) ([c72610f](https://github.com/rknightion/graph2otel/commit/c72610fcac420701abb83d68c1d6dcf2d661f9d0))
+* preserve identity in Teams collector and service health ([#718](https://github.com/rknightion/graph2otel/issues/718)) ([63f4209](https://github.com/rknightion/graph2otel/commit/63f420955c790450e96f4aeac4c0b5eecfc5cfd3))
+* preserve instant Loki alert query type ([#701](https://github.com/rknightion/graph2otel/issues/701)) ([5fd0a2e](https://github.com/rknightion/graph2otel/commit/5fd0a2eb9c8aa077347b32dd9be2db65cbb9ec26))
+* publish the latest adaptive throttle rate ([#747](https://github.com/rknightion/graph2otel/issues/747)) ([6699f32](https://github.com/rknightion/graph2otel/commit/6699f329e490ad1737e313d907becfada0dd7e67))
+* separate Teams voice queue batches from event-time legs ([#729](https://github.com/rknightion/graph2otel/issues/729)) ([da11cdb](https://github.com/rknightion/graph2otel/commit/da11cdb90a277386fea5e360ad350b10b5018dea))
+* stop intune-export 429s and alert on lost exports instead of absorbed 429s ([#710](https://github.com/rknightion/graph2otel/issues/710)) ([627e5d0](https://github.com/rknightion/graph2otel/commit/627e5d09cb769571e99c754e22129e5613121259))
+* Teams dashboard panels that render wrongly in Grafana 13 ([#771](https://github.com/rknightion/graph2otel/issues/771)) ([5b796c2](https://github.com/rknightion/graph2otel/commit/5b796c2aae707bbdedd53946d9123b1a589a50eb))
+* Teams dashboard verdict decimals, preset value header and availability sort ([#773](https://github.com/rknightion/graph2otel/issues/773)) ([9b1932b](https://github.com/rknightion/graph2otel/commit/9b1932b83ca806d1edfad2299d21f6eab74750fc))
+* update compression decoder and generated chart documentation (GTO-0013) ([20618b7](https://github.com/rknightion/graph2otel/commit/20618b7f1e75908d598c0a5ee60f15e5c8706960))
+
+
+### Refactoring
+
+* share one instrumented transport across the admin API clients ([#739](https://github.com/rknightion/graph2otel/issues/739)) ([00914c6](https://github.com/rknightion/graph2otel/commit/00914c6d94ea48a9b02fe33b12cd3a8b85c78822))
+
 ## [2.1.1](https://github.com/rknightion/graph2otel/compare/v2.1.0...v2.1.1) (2026-10-28)
 
 
