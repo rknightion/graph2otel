@@ -190,7 +190,9 @@ class TeamsDashboardTests(unittest.TestCase):
                         event = match[1]
                         self.assertTrue(event.startswith("teams.") or event in {
                             "m365.service_health_issue", "m365.teams.phone_number", "m365.teams.user_configuration",
-                            "m365.teams.phone_inventory_snapshot", "m365.teams.sip_device"})
+                            "m365.teams.phone_inventory_snapshot", "m365.teams.sip_device", "m365.teams_app"})
+                        if event == "m365.teams_app":
+                            self.assertEqual(tab, "Usage")
                         if event in {"m365.teams.phone_inventory_snapshot", "m365.teams.sip_device"}:
                             self.assertEqual(tab, "Phone inventory")
                         if tab == "Service health":

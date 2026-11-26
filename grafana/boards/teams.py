@@ -1181,6 +1181,26 @@ def usage(b):
     b.metric("m365.teams.channels.total", title="Channels by membership type", by=["membership_type", "is_archived"])
     b.metric("m365.teams.installed_apps.total", title="Installed apps by distribution",
              by=["distribution_method", "has_rsc_permissions"])
+    _app_observations(b)
+
+
+def _app_observations(b):
+    identity = ("tenant_id", "team_id", "app_id")
+    fields = (*identity, "team_display_name", "app_display_name", "external_id", "distribution_method",
+              "scope", "has_rsc_permissions", "rsc_permissions")
+    grouped = ", ".join(fields)
+    observed = b._selector("m365.teams_app", filters=[*(f(k, "ne", "") for k in identity), Raw(
+        f"keep {grouped} | label_format g2o_app_ms=`{{{{ __timestamp__ | unixEpochMillis }}}}` | unwrap g2o_app_ms",
+        keys=fields, reason="Compare observation times without mixing fields from different records")])
+    candidates = f"max_over_time({observed} [$__range]) by ({grouped})"
+    _observation_table(b, "Latest Teams app observations in range",
+                       _latest_labels(candidates, ", ".join(identity), {"observation_status": "Conflicting observations"}),
+                       (*fields, "observation_status"), "Observation time", "dateTimeAsIso",
+                       "One row per exact tenant, team and app ID from stored observations in the selected range. "
+                       "This is not a list of apps still installed. Records missing any ID remain in Loki history only. "
+                       "Blank details were not reported. If details disagree in the latest millisecond, only the IDs, "
+                       "time and conflict are shown. If Loki hits a query limit, narrow the range or select one tenant.",
+                       "No keyed Teams app observations in range. This does not mean no apps are installed.", panel_id=1040)
 
 
 def service(b):
@@ -1199,8 +1219,8 @@ def _latest_labels(candidates, key, conflict_labels):
     return f"(({latest} unless on ({key}) {tie}) or {conflict})"
 
 
-def _issue_summary(b, title, expr, columns, value_name, unit, desc, empty):
-    panel = b._viz_panel("table", title, [], unit, desc + _loki_note(), 24, 7)
+def _observation_table(b, title, expr, columns, value_name, unit, desc, empty, *, panel_id=None):
+    panel = b._viz_panel("table", title, [], unit, desc + _loki_note(), 24, 7, panel_id=panel_id)
     panel["datasource"] = LOKI_DS
     panel["targets"] = [b._loki_query(expr, query_type="instant")]
     panel["fieldConfig"]["defaults"]["noValue"] = empty
@@ -1229,7 +1249,7 @@ def issues(b):
         f"keep {key}", keys=identity, reason="Discard mutable metadata before counting keyed observations")],
         by=list(identity))
     count = f"sum by ({key}) (count_over_time({open_only} [$__range]))"
-    _issue_summary(b, "Distinct Teams issues observed open in range", count, identity,
+    _observation_table(b, "Distinct Teams issues observed open in range", count, identity,
                    "Polls seen open", "short",
                    "One row per tenant and issue ID. Counts stored open observations in the selected range, "
                    "not currently open issues. Missing IDs are left in the history only.",
@@ -1240,7 +1260,7 @@ def issues(b):
         f"keep {grouped} | label_format g2o_issue_ms=`{{{{ __timestamp__ | unixEpochMillis }}}}` | unwrap g2o_issue_ms",
         keys=fields, reason="Compare the log event timestamps while retaining the latest row's display labels")])
     candidates = f"max_over_time({observed} [$__range]) by ({grouped})"
-    _issue_summary(b, "Latest Teams issue observations in range",
+    _observation_table(b, "Latest Teams issue observations in range",
                    _latest_labels(candidates, key, {"status": "Conflicting observations"}),
                    fields, "Observation time", "dateTimeAsIso",
                    "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; "

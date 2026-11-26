@@ -14386,6 +14386,157 @@
           }
         }
       },
+      "panel-1040": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1040,
+          "title": "Latest Teams app observations in range",
+          "description": "One row per exact tenant, team and app ID from stored observations in the selected range. This is not a list of apps still installed. Records missing any ID remain in Loki history only. Blank details were not reported. If details disagree in the latest millisecond, only the IDs, time and conflict are shown. If Loki hits a query limit, narrow the range or select one tenant.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "((((max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions)) == on (tenant_id, team_id, app_id) group_left () (max by (tenant_id, team_id, app_id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions)))) unless on (tenant_id, team_id, app_id) (count by (tenant_id, team_id, app_id) (((max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions)) == on (tenant_id, team_id, app_id) group_left () (max by (tenant_id, team_id, app_id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions))))) > 1)) or label_replace(((max by (tenant_id, team_id, app_id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions))) and on (tenant_id, team_id, app_id) (count by (tenant_id, team_id, app_id) (((max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions)) == on (tenant_id, team_id, app_id) group_left () (max by (tenant_id, team_id, app_id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.teams_app` | tenant_id=~\"$tenant\" | tenant_id!=`` | team_id!=`` | app_id!=`` | keep tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions | label_format g2o_app_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_app_ms [$__range]) by (tenant_id, team_id, app_id, team_display_name, app_display_name, external_id, distribution_method, scope, has_rsc_permissions, rsc_permissions))))) > 1)), \"observation_status\", \"Conflicting observations\", \"observation_status\", \"^$\"))",
+                        "editorMode": "code",
+                        "queryType": "instant"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "last"
+                      ],
+                      "mode": "seriesToRows",
+                      "labelsToFields": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Field": true
+                      },
+                      "indexByName": {
+                        "tenant_id": 0,
+                        "team_id": 1,
+                        "app_id": 2,
+                        "team_display_name": 3,
+                        "app_display_name": 4,
+                        "external_id": 5,
+                        "distribution_method": 6,
+                        "scope": 7,
+                        "has_rsc_permissions": 8,
+                        "rsc_permissions": 9,
+                        "observation_status": 10,
+                        "Last": 11
+                      },
+                      "renameByName": {
+                        "Last": "Observation time"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Observation time",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "custom": {},
+                  "noValue": "No data yet. No keyed Teams app observations in range. This does not mean no apps are installed.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
       "panel-120": {
         "kind": "Panel",
         "spec": {
@@ -18080,6 +18231,19 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-119"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 51,
+                                  "width": 24,
+                                  "height": 7,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1040"
                                   }
                                 }
                               }
