@@ -8200,6 +8200,202 @@
                         "value": ""
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "poor_stream_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "worst_packet_loss_rate"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "percentunit"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
                   }
                 ]
               }
@@ -8366,7 +8562,12 @@
             "spec": {
               "options": {
                 "showHeader": true,
-                "sortBy": []
+                "sortBy": [
+                  {
+                    "displayName": "Time",
+                    "desc": true
+                  }
+                ]
               },
               "fieldConfig": {
                 "defaults": {
@@ -8446,6 +8647,30 @@
                       {
                         "id": "links",
                         "value": []
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -8734,7 +8959,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -8771,6 +9004,478 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health_metric"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health_value"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health_threshold"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -8901,7 +9606,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -8938,6 +9651,178 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "average_packet_loss_rate"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "percentunit"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9070,7 +9955,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9107,6 +10000,30 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9225,7 +10142,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9262,6 +10187,30 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9386,7 +10335,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9423,6 +10380,30 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9541,7 +10522,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9578,6 +10567,30 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9654,7 +10667,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9691,6 +10712,78 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "version"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Version"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Stream ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_trace_route_hops"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller trace route hops"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_trace_route_hops_omitted"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller trace route hops omitted"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9767,7 +10860,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9804,6 +10905,102 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "version"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Version"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "stream_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Stream ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "caller_identity_kind"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Caller identity kind"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_identity_kind"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee identity kind"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_app_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee app ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "callee_bot_role"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callee bot role"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -9906,7 +11103,15 @@
                     "displayName": "Time",
                     "desc": true
                   }
-                ]
+                ],
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -9943,6 +11148,30 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -16896,7 +18125,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 },
                 "sortBy": [
                   {
@@ -16961,6 +18191,42 @@
                     "matcher": {
                       "id": "byName",
                       "options": "Latest returned open"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
                     },
                     "properties": [
                       {
@@ -17066,7 +18332,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 },
                 "sortBy": [
                   {
@@ -17124,6 +18391,314 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "title"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Title"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "classification"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Classification"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "is_resolved"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Is resolved"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "is_resolved"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -17201,7 +18776,15 @@
                     "desc": true
                   }
                 ],
-                "cellHeight": "lg"
+                "cellHeight": "lg",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -17276,6 +18859,262 @@
                       {
                         "id": "custom.inspect",
                         "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "title"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Title"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "classification"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Classification"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "impact_description"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Impact description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "description"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last modified date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -17353,7 +19192,15 @@
                     "desc": true
                   }
                 ],
-                "cellHeight": "lg"
+                "cellHeight": "lg",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -17428,6 +19275,262 @@
                       {
                         "id": "custom.inspect",
                         "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "title"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Title"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "classification"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Classification"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "status"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "status"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "impact_description"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Impact description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "description"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last modified date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -17685,7 +19788,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 }
               },
               "fieldConfig": {
@@ -17874,6 +19978,78 @@
                         "value": "Last exported sample"
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "collector"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Collector"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "collector_transport"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Collector transport"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "state"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "State"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "reason"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Reason"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
                   }
                 ]
               }
@@ -18022,7 +20198,8 @@
                   "reducer": [
                     "sum"
                   ],
-                  "fields": ""
+                  "countRows": false,
+                  "enablePagination": true
                 }
               },
               "fieldConfig": {
@@ -18040,7 +20217,44 @@
                     ]
                   }
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "collector"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Collector"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -18581,7 +20795,15 @@
                   }
                 ],
                 "enablePagination": true,
-                "zebraStriping": true
+                "zebraStriping": true,
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -18767,6 +20989,190 @@
                             "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_health"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "participant_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "poor_stream_count"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "duration_seconds"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
