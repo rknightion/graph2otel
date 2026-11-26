@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 import catalog
 import v2
-from boards import teams
+import build_dashboard
 from boards.teams_quality import counter_increase
 
 
@@ -79,7 +79,7 @@ class TeamsDashboardTests(unittest.TestCase):
                             variable = {
                                 "call_id": "call_id", "site": "site", "caller_site": "site", "callee_site": "site",
                                 "caller_user_principal_name": "user", "callee_user_principal_name": "user",
-                                "organizer_user_principal_name": "user",
+                                "organizer_user_principal_name": "user", "Organiser": "user",
                             }[field]
                             self.assertEqual(query[f"var-{variable}"], ["Sample / `?&=Site"])
                             self.assertEqual(query["var-tenant"], ["example-tenant"])
@@ -89,7 +89,8 @@ class TeamsDashboardTests(unittest.TestCase):
                             routes.add((source, target, variable))
         self.assertEqual(routes, {
             ("Sites and network", "Calls", "site"), ("Calls", "Call detail", "call_id"),
-            ("Users", "Call detail", "call_id"), ("Users", "Users", "user"),
+            ("Users", "Call detail", "call_id"), ("Users", "Users", "user"), ("Calls", "Users", "user"),
+            ("Call detail", "Call detail", "call_id"), ("Call detail", "Users", "user"),
         })
 
     def test_overview_diagnosis_links_keep_the_selected_scope(self):
@@ -156,7 +157,7 @@ class TeamsDashboardTests(unittest.TestCase):
                        "viewPanel": [str(evidence["id"])], **self.selected_scope()}),
                       [self.scoped_route(link["url"]) for link in chart["links"]])
 
-    def test_phone_assignment_legend_distinguishes_tenants_after_type(self):
+    def test_phone_assignment_legend_names_type_without_tenant(self):
         panel = next(panel for panel in self.panels_by_tab()["Phone inventory"]
                      if panel["title"] == "Phone numbers over time by capability and assignment")
         [target] = panel["data"]["spec"]["queries"]
@@ -165,7 +166,7 @@ class TeamsDashboardTests(unittest.TestCase):
         labels = {"assignment_status": "assigned", "number_type": "directRouting", "capability": "voice"}
         legends = [re.sub(r"\{\{(\w+)\}\}", lambda match, tenant=tenant: ({**labels, "tenant_id": tenant})[match[1]],
                           query["legendFormat"]) for tenant in ("tenant-a", "tenant-b")]
-        self.assertEqual(legends, [f"assigned · directRouting · voice · {tenant}" for tenant in ("tenant-a", "tenant-b")])
+        self.assertEqual(legends, ["assigned · directRouting · voice"] * 2)
 
     def test_usage_refresh_dates_link_to_documented_source_clock(self):
         panels = self.panels_by_tab()["Usage"]
@@ -274,7 +275,7 @@ class TeamsDashboardTests(unittest.TestCase):
                             else:
                                 self.assertIn('.caller_site', expr)
                                 self.assertIn('.callee_site', expr)
-                        if tab == "Call detail":
+                        if tab == "Call detail" and panel["title"] != "Pick a call":
                             self.assertIn('${call_id:percentencode}', expr)
                             self.assertIn('""}}' + '{{else}}', expr)  # blank never emits the pass label
                         else:
@@ -379,6 +380,25 @@ class TeamsDashboardTests(unittest.TestCase):
             run = subprocess.run(["promtool", "test", "rules", str(path)], capture_output=True, text=True)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def test_call_filters_offer_an_empty_any_choice(self):
+        variables = {v["spec"]["name"]: v for v in self.manifest["spec"]["variables"]}
+        for name in ("health", "call_type", "modality", "min_seconds"):
+            with self.subTest(variable=name):
+                spec = variables[name]["spec"]
+                self.assertEqual(variables[name]["kind"], "CustomVariable")
+                # Grafana's CSV parser: "text : value", both sides trimmed.
+                options = []
+                for item in re.findall(r"(?:\\,|[^,])+", spec["query"]):
+                    match = re.match(r"^\s*(.+)\s:\s(.+)$", item)
+                    options.append((match[1].strip(), match[2].strip()) if match else (item.strip(), item.strip()))
+                self.assertEqual(options[0], ("Any", ""))
+                self.assertEqual(spec["current"]["value"], "")
+                self.assertTrue(spec["allowCustomValue"])
+        site = variables["site"]["spec"]
+        self.assertEqual(variables["site"]["kind"], "QueryVariable")
+        self.assertEqual(site["staticOptions"][0]["value"], "")
+        self.assertEqual(site["current"]["value"], "")
+
     def test_empty_notes_stay_readable(self):
         for tab, panels in self.panels_by_tab().items():
             for panel in panels:
@@ -387,7 +407,7 @@ class TeamsDashboardTests(unittest.TestCase):
                 with self.subTest(tab=tab, panel=panel["title"]):
                     if group == "stat":
                         # A long sentence shrinks to illegible text in a stat.
-                        self.assertEqual(field_config["defaults"]["noValue"], teams.STAT_NO_VALUE)
+                        self.assertEqual(field_config["defaults"]["noValue"], "No data yet. See panel info.")
                         self.assertIn("If it is empty:", panel["description"])
                     loki = any(q["spec"]["query"]["group"] == "loki" for q in panel["data"]["spec"]["queries"])
                     if group == "table" and loki and not any(
@@ -423,7 +443,7 @@ class TeamsDashboardTests(unittest.TestCase):
                      "m365.teams_usage.activity.users", "m365.service_health.status"):
             with self.subTest(metric=name):
                 self.assert_coverage_catches_missing(cat, name)
-        self.assertEqual(teams.coverage_violations(cat, self.manifest), [])
+        self.assertEqual(build_dashboard.teams_coverage_violations(cat, self.manifest), [])
 
     def assert_coverage_catches_missing(self, cat, name):
         panel_names = {key for key, p in self.manifest["spec"]["elements"].items()
@@ -435,4 +455,4 @@ class TeamsDashboardTests(unittest.TestCase):
             for row in tab["spec"]["layout"]["spec"]["rows"]:
                 items = row["spec"]["layout"]["spec"]["items"]
                 items[:] = [item for item in items if item["spec"]["element"]["name"] not in panel_names]
-        self.assertIn(f"Teams dashboard is missing metric {name}", teams.coverage_violations(cat, mutated))
+        self.assertIn(f"Teams dashboard is missing metric {name}", build_dashboard.teams_coverage_violations(cat, mutated))

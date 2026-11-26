@@ -7,11 +7,10 @@
   },
   "spec": {
     "title": "graph2otel Teams",
-    "description": "Microsoft Teams call, site and service health. Generated from grafana/boards/teams.py.",
+    "description": "Microsoft Teams call, site and service health.",
     "tags": [
       "graph2otel",
-      "teams",
-      "generated"
+      "teams"
     ],
     "cursorSync": "Crosshair",
     "editable": true,
@@ -161,17 +160,42 @@
         }
       },
       {
-        "kind": "TextVariable",
+        "kind": "QueryVariable",
         "spec": {
           "name": "site",
           "label": "Site search",
           "hide": "dontHide",
+          "query": {
+            "kind": "DataQuery",
+            "version": "v0",
+            "group": "prometheus",
+            "datasource": {
+              "name": "${datasource}"
+            },
+            "spec": {
+              "query": "label_values(teams_streams_total{tenant_id=~\".*\"}, site)",
+              "refId": "site"
+            }
+          },
           "current": {
-            "text": "",
+            "text": "Any",
             "value": ""
           },
-          "query": "",
+          "options": [],
+          "staticOptions": [
+            {
+              "text": "Any",
+              "value": ""
+            }
+          ],
+          "staticOptionsOrder": "before",
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true,
+          "refresh": "onDashboardLoad",
+          "regex": "",
           "skipUrlSync": false,
+          "sort": "alphabeticalAsc",
           "description": "Exact configured name, either stream side. Used by the Calls site results only."
         }
       },
@@ -191,63 +215,168 @@
         }
       },
       {
-        "kind": "TextVariable",
+        "kind": "CustomVariable",
         "spec": {
           "name": "health",
           "label": "Call health",
           "hide": "dontHide",
+          "skipUrlSync": false,
+          "description": "Exact emitted value (good, poor, or unclassified). Blank means all.",
+          "query": "Any :  ,good,poor,unclassified",
           "current": {
-            "text": "",
+            "text": "Any",
             "value": ""
           },
-          "query": "",
-          "skipUrlSync": false,
-          "description": "Exact emitted value (good, poor, or unclassified). Blank means all."
+          "options": [
+            {
+              "text": "Any",
+              "value": "",
+              "selected": true
+            },
+            {
+              "text": "good",
+              "value": "good",
+              "selected": false
+            },
+            {
+              "text": "poor",
+              "value": "poor",
+              "selected": false
+            },
+            {
+              "text": "unclassified",
+              "value": "unclassified",
+              "selected": false
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true
         }
       },
       {
-        "kind": "TextVariable",
+        "kind": "CustomVariable",
         "spec": {
           "name": "call_type",
           "label": "Call type",
           "hide": "dontHide",
+          "skipUrlSync": false,
+          "description": "Exact Graph type, e.g. peerToPeer or groupCall. Blank means all.",
+          "query": "Any :  ,groupCall,peerToPeer",
           "current": {
-            "text": "",
+            "text": "Any",
             "value": ""
           },
-          "query": "",
-          "skipUrlSync": false,
-          "description": "Exact Graph type, e.g. peerToPeer or groupCall. Blank means all."
+          "options": [
+            {
+              "text": "Any",
+              "value": "",
+              "selected": true
+            },
+            {
+              "text": "groupCall",
+              "value": "groupCall",
+              "selected": false
+            },
+            {
+              "text": "peerToPeer",
+              "value": "peerToPeer",
+              "selected": false
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true
         }
       },
       {
-        "kind": "TextVariable",
+        "kind": "CustomVariable",
         "spec": {
           "name": "modality",
           "label": "Modality",
           "hide": "dontHide",
+          "skipUrlSync": false,
+          "description": "Exact Graph modality token, e.g. audio or video. Blank means all.",
+          "query": "Any :  ,audio,video,videoBasedScreenSharing,data",
           "current": {
-            "text": "",
+            "text": "Any",
             "value": ""
           },
-          "query": "",
-          "skipUrlSync": false,
-          "description": "Exact Graph modality token, e.g. audio or video. Blank means all."
+          "options": [
+            {
+              "text": "Any",
+              "value": "",
+              "selected": true
+            },
+            {
+              "text": "audio",
+              "value": "audio",
+              "selected": false
+            },
+            {
+              "text": "video",
+              "value": "video",
+              "selected": false
+            },
+            {
+              "text": "videoBasedScreenSharing",
+              "value": "videoBasedScreenSharing",
+              "selected": false
+            },
+            {
+              "text": "data",
+              "value": "data",
+              "selected": false
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true
         }
       },
       {
-        "kind": "TextVariable",
+        "kind": "CustomVariable",
         "spec": {
           "name": "min_seconds",
           "label": "Minimum duration (seconds)",
           "hide": "dontHide",
+          "skipUrlSync": false,
+          "description": "Whole seconds. Blank means all, including unknown duration.",
+          "query": "Any :  ,30,60,300,900",
           "current": {
-            "text": "",
+            "text": "Any",
             "value": ""
           },
-          "query": "",
-          "skipUrlSync": false,
-          "description": "Whole seconds. Blank means all, including unknown duration."
+          "options": [
+            {
+              "text": "Any",
+              "value": "",
+              "selected": true
+            },
+            {
+              "text": "30",
+              "value": "30",
+              "selected": false
+            },
+            {
+              "text": "60",
+              "value": "60",
+              "selected": false
+            },
+            {
+              "text": "300",
+              "value": "300",
+              "selected": false
+            },
+            {
+              "text": "900",
+              "value": "900",
+              "selected": false
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true
         }
       }
     ],
@@ -303,7 +432,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Use the panel links for **Call quality** and **Sites and network** trends, or **PSTN and Direct Routing** for phone reports. In **Calls**, filter by duration or observed site, then open a call ID for details. For missing signals, see **Collector health**.\n\nCounters use processing time; logs use source event time. The same range can cover different events on those clocks, and late records can change log counts. Caller endpoints are not a count of distinct people and may not be call initiators."
+                "content": "**Start here.** See **Call quality** and **Sites** for trends and **Calls** to find a call. Use **Collector health** if data is missing.\n\n<small>Counters use processing time and logs use event time, so counts in the same range can differ.</small>"
               }
             }
           }
@@ -314,7 +443,7 @@
         "spec": {
           "id": 2,
           "title": "Unique call IDs (event time)",
-          "description": "Distinct call IDs per tenant by call start time. Exact for keyed Loki records visible in the selected event-time range, not a source census. Late records can change the count. Narrow the range if Loki reaches its series limit. Needs Loki. If it is empty: Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "Distinct call IDs per tenant by call start time. If it is empty: Teams publishes a call record after the call ends, sometimes hours later.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -397,7 +526,7 @@
         "spec": {
           "id": 3,
           "title": "Call versions (event time)",
-          "description": "Distinct call ID and version pairs per tenant by call start time. Exact for keyed Loki records visible in the selected event-time range, not a source census. Late records can change the count. Narrow the range if Loki reaches its series limit. Needs Loki. If it is empty: Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "Distinct call ID and version pairs per tenant by call start time. If it is empty: Teams publishes a call record after the call ends, sometimes hours later.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -480,7 +609,7 @@
         "spec": {
           "id": 4,
           "title": "Calls (collection-time estimate)",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. Estimated counter growth from exported metric samples in the selected collection-time range. Includes the first value of series with no usable baseline at range start; missing samples can distort the estimate. It is not an event-time count. If it is empty: Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran.",
+          "description": "Calls by initial health, estimated from counter growth by processing time. If it is empty: Teams publishes a call record after the call ends, sometimes hours later.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -564,7 +693,7 @@
         "spec": {
           "id": 5,
           "title": "Good share of classified calls",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. See the coverage table below for the denominator and unclassified count. If it is empty: No positive classified denominator is visible; this is not 0%.",
+          "description": "Share of good among good and poor calls, by initial health. If it is empty: No positive classified denominator is visible; this is not 0%. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -615,7 +744,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -630,10 +759,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "red",
                         "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.8
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.9
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.95
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -647,7 +791,7 @@
         "spec": {
           "id": 6,
           "title": "Direct Routing attempts (event time)",
-          "description": "Distinct Direct Routing row IDs per tenant. A row takes its start, invite or failure time, in that order. Exact for keyed Loki records visible in the selected event-time range, not a source census. Late records can change the count. Narrow the range if Loki reaches its series limit. Needs Loki. If it is empty: Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "Distinct Direct Routing row IDs per tenant. If it is empty: Teams publishes a call record after the call ends, sometimes hours later.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -730,7 +874,7 @@
         "spec": {
           "id": 7,
           "title": "Direct Routing attempts (collection-time estimate)",
-          "description": "Newly accepted Direct Routing report attempts, including unkeyed rows. Estimated counter growth from exported metric samples in the selected collection-time range. Includes the first value of series with no usable baseline at range start; missing samples can distort the estimate. It is not an event-time count. If it is empty: Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran.",
+          "description": "Newly accepted Direct Routing report attempts, including unkeyed rows. If it is empty: Teams publishes a call record after the call ends, sometimes hours later.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -814,7 +958,7 @@
         "spec": {
           "id": 8,
           "title": "Microsoft Teams service status",
-          "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured. It does not show whether a particular site is affected. If it is empty: No Microsoft Teams status sample is visible. Check Service health and Collector health. Missing status does not mean healthy.",
+          "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector. If it is empty: No Microsoft Teams status sample is visible. Colour meaning: Microsoft's declared service status, worst in red.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -935,8 +1079,8 @@
         "kind": "Panel",
         "spec": {
           "id": 9,
-          "title": "Initial call verdict coverage (processing time)",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. Prometheus estimates the counter increase over the selected range from scraped samples. This is processing time, not a count of Loki rows by call start time. Classified = good + poor; the share is blank without a classified denominator. Counts are estimates. Loki lists event-time versions, including later observations, not this population.",
+          "title": "Call verdicts in range",
+          "description": "Calls by initial health in range, estimated by processing time. If it is empty: no initial observations in range.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1138,25 +1282,31 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "table",
+            "group": "stat",
             "version": "v11.5.0",
             "spec": {
               "options": {
-                "showHeader": true,
-                "cellHeight": "sm",
-                "footer": {
-                  "show": false,
-                  "reducer": [
-                    "sum"
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
                   ],
-                  "fields": ""
-                }
+                  "values": false,
+                  "fields": "/^(Good share|Observed|Classified|Good|Poor|Unclassified)$/"
+                },
+                "orientation": "vertical",
+                "textMode": "value_and_name",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "none",
-                  "custom": {},
-                  "noValue": "No data yet. No initial observations in range.",
+                  "noValue": "No data yet. See panel info.",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -1165,8 +1315,7 @@
                         "value": null
                       }
                     ]
-                  },
-                  "decimals": 2
+                  }
                 },
                 "overrides": [
                   {
@@ -1178,18 +1327,100 @@
                       {
                         "id": "unit",
                         "value": "percentunit"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 1
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "red",
+                              "value": null
+                            },
+                            {
+                              "color": "orange",
+                              "value": 0.8
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 0.9
+                            },
+                            {
+                              "color": "green",
+                              "value": 0.95
+                            }
+                          ]
+                        }
                       }
                     ]
                   },
                   {
                     "matcher": {
                       "id": "byName",
-                      "options": "Good share"
+                      "options": "Good"
                     },
                     "properties": [
                       {
-                        "id": "noValue",
-                        "value": "-"
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Poor"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "red"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Unclassified"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#8e8e8e"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Classified"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
                       }
                     ]
                   }
@@ -1204,7 +1435,7 @@
         "spec": {
           "id": 10,
           "title": "Calls by initial health",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. Counted per interval of at least 15m, by processing time.",
+          "description": "Calls per interval by their first complete health verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1232,7 +1463,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{call_health}}",
+                        "legendFormat": "{{call_health}}",
                         "interval": "15m"
                       }
                     }
@@ -1251,7 +1482,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -1299,7 +1530,7 @@
         "spec": {
           "id": 11,
           "title": "Calls by type in range",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. Prometheus estimates the counter increase over the selected range from scraped samples. This is processing time, not a count of Loki rows by call start time.",
+          "description": "Calls by Graph call type, from each call's first complete version.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1327,7 +1558,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{type}}"
+                        "legendFormat": "{{type}}"
                       }
                     }
                   }
@@ -1376,7 +1607,7 @@
         "spec": {
           "id": 12,
           "title": "Calls with PSTN, video or sharing in range",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. A call can count in several bars. Prometheus estimates the counter increase over the selected range from scraped samples. This is processing time, not a count of Loki rows by call start time.",
+          "description": "Calls that used PSTN, video or screen sharing, from each call's first complete version.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1404,7 +1635,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "PSTN \u00b7 {{tenant_id}}"
+                        "legendFormat": "PSTN"
                       }
                     }
                   }
@@ -1431,7 +1662,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "Video \u00b7 {{tenant_id}}"
+                        "legendFormat": "Video"
                       }
                     }
                   }
@@ -1458,7 +1689,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "Sharing \u00b7 {{tenant_id}}"
+                        "legendFormat": "Sharing"
                       }
                     }
                   }
@@ -1512,7 +1743,7 @@
         "spec": {
           "id": 13,
           "title": "Recent client bucket counts by platform",
-          "description": "Initial call counts per client platform, product and version bucket, summed by platform. A call can contribute more than once to a platform. Latest 60 call-end minutes since process start, not a count over the selected range or a count of distinct people or devices. Tenant prefixes are display hints; inspect the series labels for full IDs.",
+          "description": "Initial call counts per client platform, product and version bucket, summed by platform.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1540,7 +1771,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{platform}} \u00b7 {{tenant_hint}}"
+                        "legendFormat": "{{platform}}"
                       }
                     }
                   }
@@ -1593,7 +1824,7 @@
         "spec": {
           "id": 14,
           "title": "Later call health transitions",
-          "description": "Changes between successive accepted versions. Not a correction to the initial counts. Counted per interval of at least 15m, by processing time.",
+          "description": "Changes between successive accepted versions.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1621,7 +1852,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{from_health}} \u00b7 {{to_health}}",
+                        "legendFormat": "{{from_health}} \u00b7 {{to_health}}",
                         "interval": "15m"
                       }
                     }
@@ -1640,7 +1871,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -1715,8 +1946,8 @@
         "kind": "Panel",
         "spec": {
           "id": 16,
-          "title": "Initial stream verdict coverage (processing time)",
-          "description": "Health counts the first accepted complete version and is not rewritten by later versions. Prometheus estimates the counter increase over the selected range from scraped samples. This is processing time, not a count of Loki rows by call start time. Classified = good + poor; the share is blank without a classified denominator. Counts are estimates. The Site filter applies to streams only. Loki lists event-time versions, including later observations, not this population.",
+          "title": "Stream verdicts in range",
+          "description": "Directional streams by initial verdict in range, estimated by processing time. If it is empty: no initial observations in range.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1918,25 +2149,31 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "table",
+            "group": "stat",
             "version": "v11.5.0",
             "spec": {
               "options": {
-                "showHeader": true,
-                "cellHeight": "sm",
-                "footer": {
-                  "show": false,
-                  "reducer": [
-                    "sum"
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
                   ],
-                  "fields": ""
-                }
+                  "values": false,
+                  "fields": "/^(Poor share|Observed|Classified|Good|Poor|Unclassified)$/"
+                },
+                "orientation": "vertical",
+                "textMode": "value_and_name",
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "none",
-                  "custom": {},
-                  "noValue": "No data yet. No initial observations in range.",
+                  "noValue": "No data yet. See panel info.",
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "text"
+                  },
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -1945,8 +2182,7 @@
                         "value": null
                       }
                     ]
-                  },
-                  "decimals": 2
+                  }
                 },
                 "overrides": [
                   {
@@ -1958,18 +2194,100 @@
                       {
                         "id": "unit",
                         "value": "percentunit"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 1
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 0.02
+                            },
+                            {
+                              "color": "orange",
+                              "value": 0.05
+                            },
+                            {
+                              "color": "red",
+                              "value": 0.1
+                            }
+                          ]
+                        }
                       }
                     ]
                   },
                   {
                     "matcher": {
                       "id": "byName",
-                      "options": "Poor share"
+                      "options": "Good"
                     },
                     "properties": [
                       {
-                        "id": "noValue",
-                        "value": "-"
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Poor"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "red"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Unclassified"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "#8e8e8e"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Classified"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
                       }
                     ]
                   }
@@ -1984,7 +2302,7 @@
         "spec": {
           "id": 17,
           "title": "Call failure evidence counted in range",
-          "description": "A call can count once per failure-stage and reason bucket, not once overall. Prometheus estimates the counter increase over the selected range from scraped samples. This is processing time, not a count of Loki rows by call start time. If it is empty: Requires a Graph session or segment failure stage or reason. Direct Routing SIP outcomes are separate.",
+          "description": "A call can count once per failure-stage and reason bucket, not once overall. If it is empty: Requires a Graph session or segment failure stage or reason. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2035,7 +2353,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -2050,10 +2368,21 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 1
+                      },
+                      {
+                        "color": "red",
+                        "value": 10
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -2067,7 +2396,7 @@
         "spec": {
           "id": 18,
           "title": "Mean audio round-trip time in range",
-          "description": "Mean of reported averages from measured audio streams in the selected sites. All sites includes unmapped streams. Uses histogram sums and sample counts. If it is empty: Stream metrics need completed call records with media streams. Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran.",
+          "description": "Mean of reported averages from measured audio streams in the selected sites. If it is empty: Stream metrics need completed call records with media streams. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2118,7 +2447,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -2133,10 +2462,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.1
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.2
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.5
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -2150,7 +2494,7 @@
         "spec": {
           "id": 19,
           "title": "Mean audio jitter in range",
-          "description": "Mean of reported averages from measured audio streams in the selected sites. All sites includes unmapped streams. Uses histogram sums and sample counts. If it is empty: Stream metrics need completed call records with media streams. Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran.",
+          "description": "Mean of reported averages from measured audio streams in the selected sites. If it is empty: Stream metrics need completed call records with media streams. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2201,7 +2545,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -2216,10 +2560,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.02
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.03
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -2233,7 +2592,7 @@
         "spec": {
           "id": 20,
           "title": "Mean audio packet loss in range",
-          "description": "Mean of reported averages from measured audio streams in the selected sites. All sites includes unmapped streams. Uses histogram sums and sample counts. If it is empty: Stream metrics need completed call records with media streams. Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran.",
+          "description": "Mean of reported averages from measured audio streams in the selected sites. If it is empty: Stream metrics need completed call records with media streams. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2284,7 +2643,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -2299,10 +2658,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.01
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.03
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -2316,7 +2690,7 @@
         "spec": {
           "id": 21,
           "title": "Directional streams by media and verdict",
-          "description": "Directional streams by verdict. Health counts the first accepted complete version and is not rewritten by later versions. Counted per interval of at least 15m, by processing time.",
+          "description": "Directional streams by verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2344,7 +2718,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 {{stream_health}}",
+                        "legendFormat": "{{media}} \u00b7 {{stream_health}}",
                         "interval": "15m"
                       }
                     }
@@ -2363,7 +2737,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -2411,7 +2785,7 @@
         "spec": {
           "id": 22,
           "title": "Poor-stream share by media",
-          "description": "Poor among classified streams in each interval. Gaps mean no classified stream, not zero. Counted per interval of at least 15m, by processing time.",
+          "description": "Poor among classified streams in each interval.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2439,7 +2813,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}}",
+                        "legendFormat": "{{media}}",
                         "interval": "15m"
                       }
                     }
@@ -2458,7 +2832,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -2504,7 +2878,7 @@
         "spec": {
           "id": 23,
           "title": "Round-trip time p50 and p95 by media",
-          "description": "Per-stream averages reported by the endpoints, as bucketed quantiles across streams. Counted per interval of at least 15m, by processing time.",
+          "description": "Per-stream averages reported by the endpoints, as bucketed quantiles across streams.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2532,7 +2906,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 p50",
+                        "legendFormat": "{{media}} \u00b7 p50",
                         "interval": "15m"
                       }
                     }
@@ -2560,7 +2934,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 p95",
+                        "legendFormat": "{{media}} \u00b7 p95",
                         "interval": "15m"
                       }
                     }
@@ -2579,7 +2953,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -2623,7 +2997,7 @@
         "spec": {
           "id": 24,
           "title": "Round-trip time distribution",
-          "description": "How many directional streams fell in each bucket per interval, across the selected tenants. Counted per interval of at least 15m, by processing time.",
+          "description": "How many directional streams fell in each bucket per interval, across the selected tenants.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2706,7 +3080,7 @@
         "spec": {
           "id": 25,
           "title": "Jitter p50 and p95 by media",
-          "description": "Per-stream averages reported by the endpoints, as bucketed quantiles across streams. Counted per interval of at least 15m, by processing time.",
+          "description": "Per-stream averages reported by the endpoints, as bucketed quantiles across streams.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2734,7 +3108,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 p50",
+                        "legendFormat": "{{media}} \u00b7 p50",
                         "interval": "15m"
                       }
                     }
@@ -2762,7 +3136,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 p95",
+                        "legendFormat": "{{media}} \u00b7 p95",
                         "interval": "15m"
                       }
                     }
@@ -2781,7 +3155,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -2825,7 +3199,7 @@
         "spec": {
           "id": 26,
           "title": "Jitter distribution",
-          "description": "How many directional streams fell in each bucket per interval, across the selected tenants. Counted per interval of at least 15m, by processing time.",
+          "description": "How many directional streams fell in each bucket per interval, across the selected tenants.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2908,7 +3282,7 @@
         "spec": {
           "id": 27,
           "title": "Packet loss p50 and p95 by media",
-          "description": "Per-stream averages reported by the endpoints, as bucketed quantiles across streams. Counted per interval of at least 15m, by processing time.",
+          "description": "Per-stream averages reported by the endpoints, as bucketed quantiles across streams.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2936,7 +3310,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 p50",
+                        "legendFormat": "{{media}} \u00b7 p50",
                         "interval": "15m"
                       }
                     }
@@ -2964,7 +3338,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 p95",
+                        "legendFormat": "{{media}} \u00b7 p95",
                         "interval": "15m"
                       }
                     }
@@ -2983,7 +3357,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -3029,7 +3403,7 @@
         "spec": {
           "id": 28,
           "title": "Packet loss distribution",
-          "description": "How many directional streams fell in each bucket per interval, across the selected tenants. Counted per interval of at least 15m, by processing time.",
+          "description": "How many directional streams fell in each bucket per interval, across the selected tenants.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3114,7 +3488,7 @@
         "spec": {
           "id": 29,
           "title": "Endpoint feedback",
-          "description": "Explicit user ratings, counted once per reporting side, session and media. Counted per interval of at least 15m, by processing time.",
+          "description": "Explicit user ratings, counted once per reporting side, session and media.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3142,7 +3516,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{media}} \u00b7 {{rating}}",
+                        "legendFormat": "{{media}} \u00b7 {{rating}}",
                         "interval": "15m"
                       }
                     }
@@ -3161,7 +3535,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -3209,7 +3583,7 @@
         "spec": {
           "id": 30,
           "title": "Calls with failure evidence",
-          "description": "Graph session or segment failure evidence, once per call, stage and reason bucket. Counted per interval of at least 15m, by processing time.",
+          "description": "Graph session or segment failure evidence, once per call, stage and reason bucket.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3237,7 +3611,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{failure_stage}} \u00b7 {{reason_bucket}}",
+                        "legendFormat": "{{failure_stage}} \u00b7 {{reason_bucket}}",
                         "interval": "15m"
                       }
                     }
@@ -3256,7 +3630,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -3304,7 +3678,7 @@
         "spec": {
           "id": 31,
           "title": "Poor stream causes",
-          "description": "Primary cause bucket per poor directional stream, by processing time. Low packet utilisation is unclassified, not poor.",
+          "description": "Primary cause bucket per poor directional stream, by processing time.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3332,7 +3706,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{stream_health_cause}} \u00b7 {{tenant_id}}"
+                        "legendFormat": "{{stream_health_cause}}"
                       }
                     }
                   }
@@ -3381,7 +3755,7 @@
         "spec": {
           "id": 32,
           "title": "Unclassified stream causes",
-          "description": "Primary cause bucket per unclassified directional stream, by processing time. Low packet utilisation is unclassified, not poor.",
+          "description": "Primary cause bucket per unclassified directional stream, by processing time.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3409,7 +3783,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{stream_health_cause}} \u00b7 {{tenant_id}}"
+                        "legendFormat": "{{stream_health_cause}}"
                       }
                     }
                   }
@@ -3458,7 +3832,7 @@
         "spec": {
           "id": 33,
           "title": "Recently ended calls by client bucket",
-          "description": "Calls in the latest 60 call-end minutes since process start. Client buckets overlap. Tenant prefixes are display hints; inspect the series labels for full IDs.",
+          "description": "Calls in the latest 60 call-end minutes since process start.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3486,7 +3860,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{platform}} \u00b7 {{product_family}} \u00b7 {{version_bucket}} \u00b7 {{tenant_hint}}"
+                        "legendFormat": "{{platform}} \u00b7 {{product_family}} \u00b7 {{version_bucket}}"
                       }
                     }
                   }
@@ -3504,7 +3878,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -3548,7 +3922,7 @@
         "spec": {
           "id": 34,
           "title": "Sites with audio measurements",
-          "description": "Named sender sites with at least one audio RTT, jitter, loss or known protocol observation in range. Not the configured site count or the number evaluated against the local preset. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Collector health shows whether the source ran.",
+          "description": "Named sender sites with at least one audio RTT, jitter, loss or known protocol observation in range. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3631,7 +4005,7 @@
         "spec": {
           "id": 35,
           "title": "Mean audio round-trip time",
-          "description": "Audio streams with known direction and reported round-trip time. Includes unmapped buckets when Site is All. See Site inventory for denominators. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Collector health shows whether the source ran.",
+          "description": "Audio streams with known direction and reported round-trip time. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3682,7 +4056,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -3697,10 +4071,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.1
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.2
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.5
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -3714,7 +4103,7 @@
         "spec": {
           "id": 36,
           "title": "Mean audio jitter",
-          "description": "Audio streams with known direction and reported jitter. Includes unmapped buckets when Site is All. See Site inventory for denominators. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Collector health shows whether the source ran.",
+          "description": "Audio streams with known direction and reported jitter. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3765,7 +4154,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -3780,10 +4169,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.02
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.03
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -3797,7 +4201,7 @@
         "spec": {
           "id": 37,
           "title": "Mean audio packet loss",
-          "description": "Audio streams with known direction and reported loss. Includes unmapped buckets when Site is All. See Site inventory for denominators. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Collector health shows whether the source ran.",
+          "description": "Audio streams with known direction and reported loss. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3848,7 +4252,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -3863,10 +4267,25 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.01
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.03
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -3880,7 +4299,7 @@
         "spec": {
           "id": 38,
           "title": "Audio TCP share",
-          "description": "TCP among audio streams reporting sender TCP or UDP. Includes unmapped buckets when Site is All. See Site inventory for denominators. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Collector health shows whether the source ran.",
+          "description": "TCP among audio streams reporting sender TCP or UDP. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3931,7 +4350,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -3946,10 +4365,21 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.1
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.25
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -3963,7 +4393,7 @@
         "spec": {
           "id": 39,
           "title": "Wi-Fi share of streams",
-          "description": "Wi-Fi among directional streams of any media with known sender connection type. Includes unmapped buckets when Site is All. See Site inventory for denominators. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Collector health shows whether the source ran.",
+          "description": "Wi-Fi among directional streams of any media with known sender connection type. If it is empty: Site panels need call records and a site mapping (tenants[].teams.sites_file). Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4014,7 +4444,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -4029,10 +4459,21 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.3
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.6
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -4046,7 +4487,7 @@
         "spec": {
           "id": 1002,
           "title": "Site assessment coverage",
-          "description": "Counts named sender sites only. The preset needs all four audio measurements; poor share needs classified streams of any media. Read each finding count beside its evaluated count: zero findings with zero evaluated is not a pass. Unmapped and overflow traffic is in Site inventory.",
+          "description": "Counts named sender sites only.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4338,7 +4779,7 @@
         "spec": {
           "id": 40,
           "title": "Local preset among evaluated sites",
-          "description": "Local preset: mean audio jitter \u2264 30 ms, round-trip time \u2264 200 ms, loss \u2264 2% and TCP share \u2264 1%. Each measure may use a different set of audio streams. This is not compliance with a network standard or a verified network path.",
+          "description": "Local preset: mean audio jitter \u2264 30 ms, round-trip time \u2264 200 ms, loss \u2264 2% and TCP share \u2264 1%.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4366,7 +4807,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} \u00b7 meets preset"
+                        "legendFormat": "meets preset"
                       }
                     }
                   }
@@ -4393,7 +4834,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} \u00b7 misses preset"
+                        "legendFormat": "misses preset"
                       }
                     }
                   }
@@ -4445,7 +4886,7 @@
         "spec": {
           "id": 41,
           "title": "Sites that did not meet the local preset",
-          "description": "Local preset: mean audio jitter \u2264 30 ms, round-trip time \u2264 200 ms, loss \u2264 2% and TCP share \u2264 1%. Each measure may use a different set of audio streams. This is not compliance with a network standard or a verified network path. Compare the row's audio measurements in Site inventory. Without a tenant label the site search includes all tenants.",
+          "description": "Local preset: mean audio jitter \u2264 30 ms, round-trip time \u2264 200 ms, loss \u2264 2% and TCP share \u2264 1%.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4594,7 +5035,7 @@
         "spec": {
           "id": 42,
           "title": "Sites above 5% poor classified streams",
-          "description": "Poor among classified directional streams of any media. Unclassified streams and non-site buckets are excluded. See Site inventory for each site's classified count. Without a tenant label the site search includes all tenants.",
+          "description": "Poor among classified directional streams of any media.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4755,7 +5196,7 @@
         "spec": {
           "id": 43,
           "title": "Site inventory",
-          "description": "One row per tenant and sender-site metric bucket with traffic in range. Unmapped, overflow, other and unlabelled rows do not identify named sites. If the limiter clips a bucket, its total remains but the breakdown is unavailable. An unavailable measurement can also mean no usable samples or denominator. Audio means use measured streams with known direction; verdict and Wi-Fi columns cover all media. Use the observed site tables for scoped links. Health counts the first accepted complete version and is not rewritten by later versions. Prometheus estimates the counter increase over the selected range from scraped samples. This is processing time, not a count of Loki rows by call start time.",
+          "description": "One row per tenant and sender-site metric bucket with traffic in range.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5405,7 +5846,7 @@
         "spec": {
           "id": 44,
           "title": "Observed caller sites",
-          "description": "Named sites from the configured mapping, grouped by tenant and site within the recent Loki sample. Unmapped sides are excluded because they name no site. Includes later versions. This is event time; neither the Site metric dropdown nor the metric totals apply here. A site search from a row without a tenant uses All tenants; it does not establish the row's tenant. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Named sites from the configured mapping, grouped by tenant and site within the recent Loki sample.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5588,7 +6029,7 @@
         "spec": {
           "id": 45,
           "title": "Mapped caller site locations",
-          "description": "Caller site coordinates from the configured mapping, not endpoint locations or preset results. One point per observed tenant, site and coordinate pair in the log sample; Observed caller sites also lists sites without coordinates. The two samples are separately capped, so do not divide their counts. A site search from an unlabelled point includes all tenants. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Caller site coordinates from the configured mapping, not endpoint locations or preset results.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5827,7 +6268,7 @@
         "spec": {
           "id": 46,
           "title": "Observed callee sites",
-          "description": "Named sites from the configured mapping, grouped by tenant and site within the recent Loki sample. Unmapped sides are excluded because they name no site. Includes later versions. This is event time; neither the Site metric dropdown nor the metric totals apply here. A site search from a row without a tenant uses All tenants; it does not establish the row's tenant. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Named sites from the configured mapping, grouped by tenant and site within the recent Loki sample.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6010,7 +6451,7 @@
         "spec": {
           "id": 47,
           "title": "Audio TCP share by site",
-          "description": "Observed sender TCP among known TCP or UDP audio streams. TCP can be expected; a high share is a prompt to check, not proof of blocked ports. Counted per interval of at least 15m, by processing time.",
+          "description": "Observed sender TCP among known TCP or UDP audio streams.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6038,7 +6479,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{site}}",
+                        "legendFormat": "{{site}}",
                         "interval": "15m"
                       }
                     }
@@ -6057,7 +6498,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -6131,7 +6572,7 @@
         "spec": {
           "id": 49,
           "title": "Mean audio jitter by site",
-          "description": "Mapped sender sites only. Counted per interval of at least 15m, by processing time.",
+          "description": "Mapped sender sites only.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6159,7 +6600,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{site}}",
+                        "legendFormat": "{{site}}",
                         "interval": "15m"
                       }
                     }
@@ -6178,7 +6619,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -6222,7 +6663,7 @@
         "spec": {
           "id": 50,
           "title": "Mean audio round-trip time by site",
-          "description": "Mapped sender sites only. Counted per interval of at least 15m, by processing time.",
+          "description": "Mapped sender sites only.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6250,7 +6691,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{site}}",
+                        "legendFormat": "{{site}}",
                         "interval": "15m"
                       }
                     }
@@ -6269,7 +6710,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -6313,7 +6754,7 @@
         "spec": {
           "id": 51,
           "title": "Mean audio loss fraction by site",
-          "description": "Mapped sender sites only. Counted per interval of at least 15m, by processing time.",
+          "description": "Mapped sender sites only.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6341,7 +6782,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{site}}",
+                        "legendFormat": "{{site}}",
                         "interval": "15m"
                       }
                     }
@@ -6360,7 +6801,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -6406,7 +6847,7 @@
         "spec": {
           "id": 52,
           "title": "Wi-Fi share of observed connection types by site",
-          "description": "Directional streams of any media at named sender sites, not a share of users or calls. Unknown connection types are excluded. Counted per interval of at least 15m, by processing time.",
+          "description": "Directional streams of any media at named sender sites, not a share of users or calls.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6434,7 +6875,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{site}}",
+                        "legendFormat": "{{site}}",
                         "interval": "15m"
                       }
                     }
@@ -6453,7 +6894,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -6527,7 +6968,7 @@
         "spec": {
           "id": 54,
           "title": "Call records",
-          "description": "One row per observed call version. Poor streams are not a count of affected participants. Up to 250 recent rows per result (labelled or unlabelled) in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Latest 250 call versions matching the filters. Click a call ID for details or an organiser to investigate them.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6599,6 +7040,86 @@
                       "keepTime": true
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "convertFieldType",
+                  "spec": {
+                    "options": {
+                      "conversions": [
+                        {
+                          "targetField": "duration_seconds",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "participant_count",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "poor_stream_count",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "version",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "start_time",
+                          "destinationType": "time"
+                        },
+                        {
+                          "targetField": "end_time",
+                          "destinationType": "time"
+                        }
+                      ],
+                      "fields": {}
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      },
+                      "indexByName": {
+                        "start_time": 0,
+                        "call_id": 1,
+                        "g2o_unlabelled_call_id": 2,
+                        "call_health": 3,
+                        "call_type": 4,
+                        "modalities": 5,
+                        "duration_seconds": 6,
+                        "participant_count": 7,
+                        "poor_stream_count": 8,
+                        "organizer_user_principal_name": 9,
+                        "end_time": 10,
+                        "version": 11,
+                        "tenant_id": 12
+                      },
+                      "renameByName": {
+                        "start_time": "Start",
+                        "call_health": "Health",
+                        "call_type": "Type",
+                        "modalities": "Modalities",
+                        "duration_seconds": "Duration",
+                        "participant_count": "Participants",
+                        "poor_stream_count": "Poor streams",
+                        "organizer_user_principal_name": "Organiser",
+                        "end_time": "End",
+                        "version": "Version"
+                      }
+                    }
+                  }
                 }
               ]
             }
@@ -6612,10 +7133,12 @@
                 "showHeader": true,
                 "sortBy": [
                   {
-                    "displayName": "Time",
+                    "displayName": "Start",
                     "desc": true
                   }
-                ]
+                ],
+                "enablePagination": true,
+                "zebraStriping": true
               },
               "fieldConfig": {
                 "defaults": {
@@ -6674,11 +7197,131 @@
                     },
                     "properties": [
                       {
+                        "id": "displayName",
+                        "value": "Call ID"
+                      },
+                      {
                         "id": "links",
                         "value": [
                           {
                             "title": "Open Call detail",
                             "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Health"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "text": "Good",
+                                "index": 0
+                              },
+                              "poor": {
+                                "color": "red",
+                                "text": "Poor",
+                                "index": 1
+                              },
+                              "unclassified": {
+                                "color": "#8e8e8e",
+                                "text": "Unclassified",
+                                "index": 2
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Duration"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Poor streams"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-text"
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "text",
+                              "value": null
+                            },
+                            {
+                              "color": "red",
+                              "value": 1
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Organiser"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Investigate this organiser",
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -6695,7 +7338,7 @@
         "spec": {
           "id": 1042,
           "title": "Visible call evidence at the selected site",
-          "description": "Counts the matching stream rows Loki returns, by stream start, not the capped table below. Every counted row has the exact site on either side and has a tenant, call ID and version. The optional user can match either side of that same row. Versions are distinct per call and tenant. Repeated observations count as rows, not as new versions, distinct streams or people. This is not a census of all calls at the site. Rows without a tenant or version can still appear below. Loki can silently shorten the requested time range. This table covers only evidence Loki returns; choose a shorter range or fewer tenants if the query reports a limit.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Counts of matching stream rows Loki returns at the exact site, not a census.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6763,6 +7406,12 @@
                         "Returned distinct call IDs": 1,
                         "Returned distinct call versions": 2,
                         "Returned stream observations": 3
+                      },
+                      "renameByName": {
+                        "tenant_id": "Tenant",
+                        "Returned distinct call IDs": "Call IDs",
+                        "Returned distinct call versions": "Call versions",
+                        "Returned stream observations": "Stream observations"
                       }
                     }
                   }
@@ -6787,10 +7436,11 @@
                 },
                 "sortBy": [
                   {
-                    "displayName": "Returned distinct call IDs",
+                    "displayName": "Call IDs",
                     "desc": true
                   }
-                ]
+                ],
+                "zebraStriping": true
               },
               "fieldConfig": {
                 "defaults": {
@@ -6843,7 +7493,7 @@
         "spec": {
           "id": 55,
           "title": "Call IDs observed at the selected site",
-          "description": "One row per matching stream observation, not a joined call summary. A call can appear more than once. Up to 250 recent rows per result (labelled or unlabelled) in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per matching stream observation, not a joined call summary.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6915,6 +7565,58 @@
                       "keepTime": true
                     }
                   }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "convertFieldType",
+                  "spec": {
+                    "options": {
+                      "conversions": [
+                        {
+                          "targetField": "version",
+                          "destinationType": "number"
+                        }
+                      ],
+                      "fields": {}
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      },
+                      "indexByName": {
+                        "call_id": 0,
+                        "g2o_unlabelled_call_id": 1,
+                        "stream_health": 2,
+                        "media": 3,
+                        "caller_site": 4,
+                        "callee_site": 5,
+                        "stream_id": 6,
+                        "version": 7,
+                        "tenant_id": 8
+                      },
+                      "renameByName": {
+                        "stream_health": "Health",
+                        "media": "Media",
+                        "caller_site": "Caller site",
+                        "callee_site": "Callee site",
+                        "stream_id": "Stream ID",
+                        "version": "Version"
+                      }
+                    }
+                  }
                 }
               ]
             }
@@ -6928,10 +7630,12 @@
                 "showHeader": true,
                 "sortBy": [
                   {
-                    "displayName": "Time",
+                    "displayName": "Version",
                     "desc": true
                   }
-                ]
+                ],
+                "enablePagination": true,
+                "zebraStriping": true
               },
               "fieldConfig": {
                 "defaults": {
@@ -6990,11 +7694,66 @@
                     },
                     "properties": [
                       {
+                        "id": "displayName",
+                        "value": "Call ID"
+                      },
+                      {
                         "id": "links",
                         "value": [
                           {
                             "title": "Open Call detail",
                             "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Health"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "text": "Good",
+                                "index": 0
+                              },
+                              "poor": {
+                                "color": "red",
+                                "text": "Poor",
+                                "index": 1
+                              },
+                              "unclassified": {
+                                "color": "#8e8e8e",
+                                "text": "Unclassified",
+                                "index": 2
+                              }
+                            }
                           }
                         ]
                       }
@@ -7039,7 +7798,7 @@
         "spec": {
           "id": 57,
           "title": "Call verdict and worst observed metrics by version",
-          "description": "Source start and end per version. Shared reflexive IP suggests a common breakout, not a proven path. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Source start and end per version.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7192,7 +7951,7 @@
         "spec": {
           "id": 58,
           "title": "Call bounds and timeline zoom",
-          "description": "Open the stream timeline in a new tab. Bounds use the selected call's dated versions and plotted stream peers in this search, padded by one second. The investigation window on this tab does not change. Zoom requires a tenant ID; unlabelled rows are still visible in the All-tenant evidence. Up to 250 recent rows from each source; not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Call start and end per version, with a link to zoom the timeline.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7440,7 +8199,7 @@
         "spec": {
           "id": 59,
           "title": "Dated stream intervals",
-          "description": "One verdict per dated directional stream, not a verdict history. Stream bounds can fall back to source segment dates. Use the bounds link to see the whole observed span without narrowing this search. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One verdict per dated directional stream, not a verdict history.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7614,7 +8373,7 @@
         "spec": {
           "id": 60,
           "title": "Stream verdict evidence",
-          "description": "The collector sets the verdict. Low packet utilisation means unclassified, not poor. Good streams and some unclassified streams have no threshold evidence. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "The measurements behind each stream verdict, which the collector sets.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7765,7 +8524,7 @@
         "spec": {
           "id": 61,
           "title": "Directional streams",
-          "description": "Caller and callee are the reported media endpoints, not the full meeting roster. Impact labels follow the direction of a poor stream; they do not assign fault. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Caller and callee are the reported media endpoints, not the full meeting roster.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7932,7 +8691,7 @@
         "spec": {
           "id": 62,
           "title": "Reported caller endpoint",
-          "description": "Device JSON may carry audio capture and render data. Callee platform and client version are not catalogued. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Device JSON may carry audio capture and render data.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8101,7 +8860,7 @@
         "spec": {
           "id": 63,
           "title": "Reported caller addresses and ASN",
-          "description": "ASN is optional reflexive address enrichment. Relay allocations do not prove relay use. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "ASN is optional reflexive address enrichment.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8256,7 +9015,7 @@
         "spec": {
           "id": 64,
           "title": "Reported callee endpoint",
-          "description": "Device JSON may carry audio capture and render data. Callee platform and client version are not catalogued. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Device JSON may carry audio capture and render data.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8417,7 +9176,7 @@
         "spec": {
           "id": 65,
           "title": "Reported callee addresses and ASN",
-          "description": "ASN is optional reflexive address enrichment. Relay allocations do not prove relay use. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "ASN is optional reflexive address enrichment.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8572,7 +9331,7 @@
         "spec": {
           "id": 66,
           "title": "Reported caller trace hops",
-          "description": "No trace reported for this call if empty. Missing hops do not establish a direct path. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Network trace hops reported for the caller, empty when none were reported.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8685,7 +9444,7 @@
         "spec": {
           "id": 67,
           "title": "Application and bot evidence",
-          "description": "Application identity kinds and observed callee bot roles, not a count of all bots or attendees. Caller app ID and bot role are not catalogued. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Application identity kinds and observed callee bot roles, not a count of all bots or attendees.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8798,7 +9557,7 @@
         "spec": {
           "id": 1001,
           "title": "Participant roster by call version",
-          "description": "Graph roster observations for accepted versions, dated at call start. Roster row and identity IDs are separate. This is not a join to media endpoints, participant join times or quality impact, and is not an atomic source snapshot. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Graph roster observations for accepted versions, dated at call start.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -8965,7 +9724,7 @@
         "spec": {
           "id": 69,
           "title": "Observed caller UPNs",
-          "description": "One row per tenant and recorded UPN from the recent dated log sample. Unlabelled tenants and unreported UPNs are not listed. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per tenant and recorded UPN from the recent dated log sample.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9129,7 +9888,7 @@
         "spec": {
           "id": 70,
           "title": "Observed callee UPNs",
-          "description": "One row per tenant and recorded UPN from the recent dated log sample. Unlabelled tenants and unreported UPNs are not listed. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per tenant and recorded UPN from the recent dated log sample.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9293,7 +10052,7 @@
         "spec": {
           "id": 71,
           "title": "Observed organiser UPNs",
-          "description": "One row per tenant and recorded UPN from the recent dated log sample. Unlabelled tenants and unreported UPNs are not listed. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per tenant and recorded UPN from the recent dated log sample.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9457,7 +10216,7 @@
         "spec": {
           "id": 72,
           "title": "Recent stream observations for the selected user",
-          "description": "Scope compares a reported UPN with the configured domains. Unknown is not external; it includes an unavailable UPN, an unconfigured rule set or an older record without scope. Direction describes the stream, not who is at fault. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Scope compares a reported UPN with the configured domains.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9587,7 +10346,7 @@
         "spec": {
           "id": 73,
           "title": "Recent calls organised by the selected user",
-          "description": " Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Latest 250 calls organised by the selected user.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9717,7 +10476,7 @@
         "spec": {
           "id": 74,
           "title": "PSTN report rows (event time)",
-          "description": "Distinct PSTN row ID, PSTN call ID and start time tuples per tenant, with at least one ID. Row IDs can be shared; this is not a count of unique Teams calls. Exact for keyed Loki records visible in the selected event-time range, not a source census. Late records can change the count. Narrow the range if Loki reaches its series limit. Needs Loki. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "Distinct PSTN row ID, PSTN call ID and start time tuples per tenant, with at least one ID. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9800,7 +10559,7 @@
         "spec": {
           "id": 75,
           "title": "PSTN report rows (collection-time estimate)",
-          "description": "Newly accepted PSTN report rows, including unkeyed rows. Estimated counter growth from exported metric samples in the selected collection-time range. Includes the first value of series with no usable baseline at range start; missing samples can distort the estimate. It is not an event-time count. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows. Collector health shows whether the source ran.",
+          "description": "Newly accepted PSTN report rows, including unkeyed rows. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9884,7 +10643,7 @@
         "spec": {
           "id": 76,
           "title": "PSTN connected minutes (collection-time estimate)",
-          "description": "Reported non-negative durations of newly accepted PSTN rows with a duration. Estimated counter growth from exported metric samples in the selected collection-time range. Includes the first value of series with no usable baseline at range start; missing samples can distort the estimate. It is not an event-time count. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows. Collector health shows whether the source ran.",
+          "description": "Reported non-negative durations of newly accepted PSTN rows with a duration. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -9968,7 +10727,7 @@
         "spec": {
           "id": 77,
           "title": "Direct Routing attempts (event time)",
-          "description": "Distinct Direct Routing row IDs per tenant. A row takes its start, invite or failure time, in that order. Exact for keyed Loki records visible in the selected event-time range, not a source census. Late records can change the count. Narrow the range if Loki reaches its series limit. Needs Loki. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "Distinct Direct Routing row IDs per tenant. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10051,7 +10810,7 @@
         "spec": {
           "id": 78,
           "title": "Direct Routing attempts (collection-time estimate)",
-          "description": "Newly accepted Direct Routing report attempts, including unkeyed rows. Estimated counter growth from exported metric samples in the selected collection-time range. Includes the first value of series with no usable baseline at range start; missing samples can distort the estimate. It is not an event-time count. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows. Collector health shows whether the source ran.",
+          "description": "Newly accepted Direct Routing report attempts, including unkeyed rows. If it is empty: PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10135,7 +10894,7 @@
         "spec": {
           "id": 79,
           "title": "Direct Routing attempts by trunk and SIP outcome",
-          "description": "Answered means Graph reports successful_call=true, even with SIP 403, which still counts in the 4xx class. Otherwise SIP 486 or 600 is busy. Other explicit failures or SIP 4xx to 6xx are failed; the rest are unknown. Counted per interval of at least 15m, by processing time.",
+          "description": "Answered means Graph reports successful_call=true, even with SIP 403, which still counts in the 4xx class.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10163,7 +10922,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{trunk_fqdn}} \u00b7 {{sip_class}} \u00b7 {{outcome}}",
+                        "legendFormat": "{{trunk_fqdn}} \u00b7 {{sip_class}} \u00b7 {{outcome}}",
                         "interval": "15m"
                       }
                     }
@@ -10182,7 +10941,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -10230,7 +10989,7 @@
         "spec": {
           "id": 80,
           "title": "Latest exported Direct Routing effectiveness",
-          "description": "Each sample reflects the most recent available poll value, not a ratio over the selected range. Lookback can repeat a value between observations. Per trunk, the numerator is answered plus busy attempts. The denominator is all newly accepted attempts, including unknowns, not all attempts made. No new attempts means no new ratio. This is not an SBC health check or proof of connected media. Answered means Graph reports successful_call=true, even with SIP 403, which still counts in the 4xx class. Otherwise SIP 486 or 600 is busy. Other explicit failures or SIP 4xx to 6xx are failed; the rest are unknown.",
+          "description": "Each sample reflects the most recent available poll value, not a ratio over the selected range.",
           "links": [
             {
               "title": "See same-poll counts and source success / SIP 4xx conflicts",
@@ -10263,7 +11022,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{trunk_fqdn}}"
+                        "legendFormat": "{{trunk_fqdn}}"
                       }
                     }
                   }
@@ -10281,7 +11040,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -10327,7 +11086,7 @@
         "spec": {
           "id": 81,
           "title": "Direct Routing effectiveness counts by poll",
-          "description": "Each dated row is a successful poll with new attempts for this trunk. Effective is the numerator, poll attempts is the denominator, and source success with SIP 4xx is a subset of effective. Rows are poll-time evidence, not call start times or a range-wide rate. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Each dated row is a successful poll with new attempts for this trunk.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10440,7 +11199,7 @@
         "spec": {
           "id": 82,
           "title": "PSTN call records",
-          "description": "PSTN, Direct Routing and Graph call detail IDs are source-scoped, not join keys. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "PSTN, Direct Routing and Graph call detail IDs are source-scoped, not join keys.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10553,7 +11312,7 @@
         "spec": {
           "id": 83,
           "title": "Direct Routing records",
-          "description": "Source success and the final SIP code are independent evidence. Compare the timestamps where a start is absent. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Source success and the final SIP code are independent evidence.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10694,7 +11453,7 @@
         "spec": {
           "id": 85,
           "title": "Distinct keyed queue legs in range",
-          "description": "One leg per tenant, queue ID and dialog ID in the selected event-time range. Includes keys with unknown results. Shorten the range if Loki reaches its series limit. Requires the Loki datasource. If it is empty: Needs the optional teams.voice_apps collector, off by default. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "One leg per tenant, queue ID and dialog ID in the selected event-time range. If it is empty: Needs the optional teams.voice_apps collector, off by default.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10721,7 +11480,7 @@
                         "expr": "count by (tenant_id, queue) (sum by (tenant_id, queue, dialog_id) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_queue_call` | tenant_id=~\"$tenant\" | ingest_transport=`vaac` | queue!=`` | dialog_id!=`` | keep tenant_id, queue, dialog_id [$__range])))",
                         "editorMode": "code",
                         "queryType": "instant",
-                        "legendFormat": "{{tenant_id}} \u00b7 {{queue}}"
+                        "legendFormat": "{{queue}}"
                       }
                     }
                   }
@@ -10776,7 +11535,7 @@
         "spec": {
           "id": 86,
           "title": "Call queue observations in range",
-          "description": "Counts stored Loki observations, including unkeyed rows that can repeat across polls. This is not a count of calls or distinct legs. Requires the Loki datasource. If it is empty: Needs the optional teams.voice_apps collector, off by default. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+          "description": "Counts stored Loki observations, including unkeyed rows that can repeat across polls. If it is empty: Needs the optional teams.voice_apps collector, off by default.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10858,7 +11617,7 @@
         "spec": {
           "id": 87,
           "title": "Call queue outcomes by saved batch",
-          "description": "Counts and shares come from a single saved batch per queue. Zero known results means both shares are undefined. No row means no saved observation is visible, not zero calls. Dates show processing time, not call time. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Counts and shares come from a single saved batch per queue.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11025,7 +11784,7 @@
         "spec": {
           "id": 88,
           "title": "Call queue wait time p50",
-          "description": "Bucketed quantile of admitted queue waits. Read the observation count beside it. Counted per interval of at least 15m, by processing time.",
+          "description": "Bucketed quantile of admitted queue waits.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11053,7 +11812,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{queue}}",
+                        "legendFormat": "{{queue}}",
                         "interval": "15m"
                       }
                     }
@@ -11072,7 +11831,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -11116,7 +11875,7 @@
         "spec": {
           "id": 89,
           "title": "Call queue wait time p95",
-          "description": "Bucketed quantile of admitted queue waits. Read the observation count beside it. Counted per interval of at least 15m, by processing time.",
+          "description": "Bucketed quantile of admitted queue waits.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11144,7 +11903,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{queue}}",
+                        "legendFormat": "{{queue}}",
                         "interval": "15m"
                       }
                     }
@@ -11163,7 +11922,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -11207,7 +11966,7 @@
         "spec": {
           "id": 90,
           "title": "Admitted queue wait observations",
-          "description": "Sample count from the same histogram and interval as p50 and p95. Estimated from scraped counter samples, not from Loki rows. Counted per interval of at least 15m, by processing time.",
+          "description": "Sample count from the same histogram and interval as p50 and p95.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11235,7 +11994,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{queue}}",
+                        "legendFormat": "{{queue}}",
                         "interval": "15m"
                       }
                     }
@@ -11254,7 +12013,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -11298,7 +12057,7 @@
         "spec": {
           "id": 91,
           "title": "Auto attendant call legs by outcome",
-          "description": "Auto attendant call legs by bounded outcome. Counted per interval of at least 15m, by processing time.",
+          "description": "Auto attendant call legs by bounded outcome.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11326,7 +12085,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{auto_attendant}} \u00b7 {{voice_outcome}}",
+                        "legendFormat": "{{auto_attendant}} \u00b7 {{voice_outcome}}",
                         "interval": "15m"
                       }
                     }
@@ -11345,7 +12104,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -11393,7 +12152,7 @@
         "spec": {
           "id": 92,
           "title": "Keyed call queue observations",
-          "description": "Rows with both a queue ID and a dialog ID. The summary above counts distinct keys. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Rows with both a queue ID and a dialog ID.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11506,7 +12265,7 @@
         "spec": {
           "id": 93,
           "title": "Unkeyed call queue observations",
-          "description": "The queue ID, dialog ID or both are absent or invalid. These rows can repeat across polls and do not count as legs. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "The queue ID, dialog ID or both are absent or invalid.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11619,7 +12378,7 @@
         "spec": {
           "id": 94,
           "title": "Auto attendant legs",
-          "description": " Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Latest 250 auto attendant call legs in range.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11732,7 +12491,7 @@
         "spec": {
           "id": 95,
           "title": "Call queue share gauges (export diagnostics)",
-          "description": "Independent gauge series can be stale or clipped. Use the saved batches above for shares with their matching denominator.",
+          "description": "Independent gauge series can be stale or clipped.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11760,7 +12519,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "Answer \u00b7 {{tenant_id}} \u00b7 {{queue}}"
+                        "legendFormat": "Answer \u00b7 {{queue}}"
                       }
                     }
                   }
@@ -11787,7 +12546,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "Abandon \u00b7 {{tenant_id}} \u00b7 {{queue}}"
+                        "legendFormat": "Abandon \u00b7 {{queue}}"
                       }
                     }
                   }
@@ -11805,7 +12564,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -11851,7 +12610,7 @@
         "spec": {
           "id": 96,
           "title": "Unassigned phone numbers",
-          "description": "Latest metric export visible at the selected range end, per tenant. Numbers with Graph's unassigned status. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+          "description": "Latest metric export visible at the selected range end, per tenant. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11934,7 +12693,7 @@
         "spec": {
           "id": 97,
           "title": "Enterprise Voice enabled users",
-          "description": "Latest metric export visible at the selected range end, per tenant. Counts only confirmed enablement. Zero means no enabled configuration was reported and at least one was explicitly disabled. Unknown states are not counted. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+          "description": "Latest metric export visible at the selected range end, per tenant. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12017,7 +12776,7 @@
         "spec": {
           "id": 98,
           "title": "Teams user configurations",
-          "description": "Latest metric export visible at the selected range end, per tenant. All configurations returned, including resource accounts and ineligible users. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+          "description": "Latest metric export visible at the selected range end, per tenant. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12100,7 +12859,7 @@
         "spec": {
           "id": 99,
           "title": "Phone numbers by capability and assignment",
-          "description": "Latest metric export visible at the selected range end, per tenant. A number can support several capabilities, so do not add the capability rows together.",
+          "description": "Latest metric export visible at the selected range end, per tenant.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12192,7 +12951,7 @@
         "spec": {
           "id": 100,
           "title": "User configurations by account type",
-          "description": "Latest metric export visible at the selected range end, per tenant. Voice enablement by Teams account type. See the log rows for assignment details.",
+          "description": "Latest metric export visible at the selected range end, per tenant.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12284,7 +13043,7 @@
         "spec": {
           "id": 1010,
           "title": "Reported effective policy assignments",
-          "description": "Latest metric export visible at the selected range end, per tenant. Counts assignments returned by Graph, not distinct users or policy definitions. A complete poll reports zero for absent policy buckets. Types outside the known set count as unknown and are kept verbatim in the logs.",
+          "description": "Latest metric export visible at the selected range end, per tenant.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12376,7 +13135,7 @@
         "spec": {
           "id": 1011,
           "title": "Last reported inventory poll finish",
-          "description": "Last reported poll finish in the selected range, per tenant and collector. Finishes include unsuccessful attempts. This timestamp does not establish a complete read.",
+          "description": "Last reported poll finish in the selected range, per tenant and collector.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12468,7 +13227,7 @@
         "spec": {
           "id": 101,
           "title": "Phone numbers over time by capability and assignment",
-          "description": "Each series counts numbers for one capability. Capabilities overlap, so do not add them together.",
+          "description": "Each series counts numbers for one capability.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12496,7 +13255,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{assignment_status}} \u00b7 {{number_type}} \u00b7 {{capability}} \u00b7 {{tenant_id}}"
+                        "legendFormat": "{{assignment_status}} \u00b7 {{number_type}} \u00b7 {{capability}}"
                       }
                     }
                   }
@@ -12514,7 +13273,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -12604,7 +13363,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -12648,7 +13407,7 @@
         "spec": {
           "id": 103,
           "title": "Phone number inventory history",
-          "description": "Observations from all polls in range, including older assignments and numbers later removed. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Observations from all polls in range, including older assignments and numbers later removed.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12761,7 +13520,7 @@
         "spec": {
           "id": 104,
           "title": "Teams user configuration history",
-          "description": "Observations from all polls in range, including configurations later changed or removed. Blank assignment cells mean no assignments were reported on that row. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Observations from all polls in range, including configurations later changed or removed.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12874,7 +13633,7 @@
         "spec": {
           "id": 1012,
           "title": "Inventory completion history",
-          "description": "One marker per fully collected poll. Zero means the source poll was empty. A marker does not prove delivery of its detail rows. A missing marker proves nothing. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One marker per fully collected poll.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13015,7 +13774,7 @@
         "spec": {
           "id": 1030,
           "title": "SIP device observations",
-          "description": "Hourly beta observations in range, not a live census or a provisioning policy. Not reported is not healthy. Failed health reads are in Collector health. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Hourly beta observations in range, not a live census or a provisioning policy.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13184,7 +13943,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{routing_method}}"
+                        "legendFormat": "{{routing_method}}"
                       }
                     }
                   }
@@ -13202,7 +13961,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -13246,7 +14005,7 @@
         "spec": {
           "id": 107,
           "title": "Teams subnets by sites CSV coverage",
-          "description": "Teams tenant network subnets by sites CSV coverage: covered (one CSV prefix contains the whole subnet), uncovered (no such prefix) or no_csv (no teams.sites_file configured).",
+          "description": "Teams network subnets by whether the sites CSV covers them.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13274,7 +14033,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{coverage}}"
+                        "legendFormat": "{{coverage}}"
                       }
                     }
                   }
@@ -13292,7 +14051,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -13336,7 +14095,7 @@
         "spec": {
           "id": 108,
           "title": "Direct Routing gateways by enabled",
-          "description": "Configured Direct Routing gateways (SBCs) by whether they are enabled. Per-gateway configuration is in the teams.pstn_gateway log twins.",
+          "description": "Configured Direct Routing gateways (SBCs) by whether they are enabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13364,7 +14123,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{enabled}}"
+                        "legendFormat": "{{enabled}}"
                       }
                     }
                   }
@@ -13382,7 +14141,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -13454,7 +14213,7 @@
         "spec": {
           "id": 110,
           "title": "Teams users by platform (D7)",
-          "description": "From the Teams device usage report. A user may appear on several platforms; do not sum them.",
+          "description": "From the Teams device usage report.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13482,7 +14241,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{platform}}"
+                        "legendFormat": "{{platform}}"
                       }
                     }
                   }
@@ -13500,7 +14259,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -13544,7 +14303,7 @@
         "spec": {
           "id": 1020,
           "title": "D7 report refresh date",
-          "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). Not a poll time or an activity date. No date is shown if the report did not establish one. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). If it is empty: Usage reports refresh daily; the first values follow the first report poll.",
           "links": [
             {
               "title": "Investigate by report refresh date",
@@ -13661,7 +14420,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{activity}}"
+                        "legendFormat": "{{activity}}"
                       }
                     }
                   }
@@ -13679,7 +14438,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -13723,7 +14482,7 @@
         "spec": {
           "id": 1021,
           "title": "D30 report refresh date",
-          "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). Not a poll time or an activity date. No date is shown if the report did not establish one. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). If it is empty: Usage reports refresh daily; the first values follow the first report poll.",
           "links": [
             {
               "title": "Investigate by report refresh date",
@@ -13812,7 +14571,7 @@
         "spec": {
           "id": 112,
           "title": "Report names concealed",
-          "description": "On means Microsoft conceals names in usage reports. Identifier joins are not guaranteed. Unknown means the collector is visible but did not report the setting. No data means neither the setting nor the collector census is visible in this range. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "description": "On means Microsoft conceals names in usage reports. If it is empty: Usage reports refresh daily; the first values follow the first report poll.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13840,7 +14599,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} \u00b7 On"
+                        "legendFormat": "On"
                       }
                     }
                   }
@@ -13867,7 +14626,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} \u00b7 Off"
+                        "legendFormat": "Off"
                       }
                     }
                   }
@@ -13894,7 +14653,7 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} \u00b7 Unknown"
+                        "legendFormat": "Unknown"
                       }
                     }
                   }
@@ -13949,7 +14708,7 @@
         "spec": {
           "id": 113,
           "title": "Teams in the tenant",
-          "description": "All teams, any visibility. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "description": "All teams, any visibility. If it is empty: Usage reports refresh daily; the first values follow the first report poll.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14032,7 +14791,7 @@
         "spec": {
           "id": 114,
           "title": "Ownerless teams",
-          "description": "Teams with no owner, excluding archived teams. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "description": "Teams with no owner, excluding archived teams. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14083,7 +14842,7 @@
                   "fields": "",
                   "values": false
                 },
-                "colorMode": "none",
+                "colorMode": "background",
                 "graphMode": "area",
                 "textMode": "auto",
                 "justifyMode": "auto",
@@ -14098,10 +14857,17 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 1
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -14115,7 +14881,7 @@
         "spec": {
           "id": 115,
           "title": "Teams with guests",
-          "description": "Teams with at least one guest member. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "description": "Teams with at least one guest member. If it is empty: Usage reports refresh daily; the first values follow the first report poll.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14226,7 +14992,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{visibility}}"
+                        "legendFormat": "{{visibility}}"
                       }
                     }
                   }
@@ -14244,7 +15010,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -14316,7 +15082,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{role}}"
+                        "legendFormat": "{{role}}"
                       }
                     }
                   }
@@ -14334,7 +15100,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -14406,7 +15172,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{membership_type}} {{is_archived}}"
+                        "legendFormat": "{{membership_type}} {{is_archived}}"
                       }
                     }
                   }
@@ -14424,7 +15190,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -14496,7 +15262,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{distribution_method}} {{has_rsc_permissions}}"
+                        "legendFormat": "{{distribution_method}} {{has_rsc_permissions}}"
                       }
                     }
                   }
@@ -14514,7 +15280,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -14558,7 +15324,7 @@
         "spec": {
           "id": 1040,
           "title": "Latest Teams app observations in range",
-          "description": "One row per exact tenant, team and app ID from stored observations in the selected range. This is not a list of apps still installed. Records missing any ID remain in Loki history only. Blank details were not reported. If details disagree in the latest millisecond, only the IDs, time and conflict are shown. If Loki hits a query limit, narrow the range or select one tenant.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per exact tenant, team and app ID from stored observations in the selected range.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14709,7 +15475,7 @@
         "spec": {
           "id": 120,
           "title": "Microsoft Teams service status",
-          "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured. If it is empty: Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
+          "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector. If it is empty: Needs the m365.servicehealth collector. Colour meaning: Microsoft's declared service status, worst in red.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14831,7 +15597,7 @@
         "spec": {
           "id": 121,
           "title": "Microsoft Teams service status over time",
-          "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured.",
+          "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector. Colour meaning: Microsoft's declared service status, worst in red.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14940,7 +15706,7 @@
         "spec": {
           "id": 122,
           "title": "Visible open observations by Teams issue",
-          "description": "One row per exact tenant and issue ID. Counts and dates use the open observations Loki returns, on the poll clock. They do not show issue start, resolution or whether it is still open. Rows without a tenant or issue ID remain in history. Loki can silently shorten the requested time range. This table covers only evidence Loki returns; choose a shorter range or fewer tenants if the query reports a limit.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per exact tenant and issue ID.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -15114,7 +15880,7 @@
         "spec": {
           "id": 123,
           "title": "Latest Teams issue observations in range",
-          "description": "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; resolutions use Microsoft's end time. If different display details share the latest millisecond, read the dated history below. This is not a current open-issue inventory.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Latest stored event per tenant and issue ID in the selected range.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -15272,7 +16038,7 @@
         "spec": {
           "id": 124,
           "title": "Teams issue observations while open",
-          "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Teams issue observations while the issue was open.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -15424,7 +16190,7 @@
         "spec": {
           "id": 125,
           "title": "Teams resolution events",
-          "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "Teams issues observed as resolved.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -15576,7 +16342,7 @@
         "spec": {
           "id": 126,
           "title": "Service issues by classification and status (all services)",
-          "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns. This metric does not carry a service label.",
+          "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -15604,7 +16370,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{classification}} {{status}}"
+                        "legendFormat": "{{classification}} {{status}}"
                       }
                     }
                   }
@@ -15622,7 +16388,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -15694,7 +16460,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{status}}"
+                        "legendFormat": "{{status}}"
                       }
                     }
                   }
@@ -15712,7 +16478,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -15756,7 +16522,7 @@
         "spec": {
           "id": 128,
           "title": "Signal availability",
-          "description": "Newest exported state and reason per tenant, collector and collector transport at the selected end time, within the datasource's instant lookback. Compare these columns with availability.state, availability.reason and availability.transport in the poller's admin /api/status.json. Admin is live; this table can lag the snapshot refresh and export. If the newest samples have the same timestamp but disagree, the state is unknown. Healthy, empty means the run succeeded without fetching rows, not disabled or failed.",
+          "description": "Newest exported state and reason per tenant, collector and collector transport at the selected end time, within the datasource's instant lookback.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16020,7 +16786,7 @@
         "spec": {
           "id": 1041,
           "title": "graph2otel process starts",
-          "description": "One observation per process start per configured tenant. Compare build versions or configuration fingerprints between starts. A start is not evidence of a crash or of a successful scrape.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One observation per process start per configured tenant.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16093,7 +16859,7 @@
         "spec": {
           "id": 129,
           "title": "Scheduled collector interval",
-          "description": "Latest exported scheduler interval (admin interval_seconds), when newest samples agree. Cadence, last success and checkpoint metrics identify only tenant and collector, not transport. Compare against availability, but do not read these metrics as per-transport results.",
+          "description": "Latest exported scheduler interval (admin interval_seconds), when newest samples agree.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16185,7 +16951,7 @@
         "spec": {
           "id": 130,
           "title": "Window watermark lag",
-          "description": "Age of the durable event-time cursor (admin checkpoint watermark for window collectors). A successful quiet window can still advance its cursor. Missing is not zero lag.",
+          "description": "Age of the durable event-time cursor (admin checkpoint watermark for window collectors).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16213,7 +16979,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{collector}}"
+                        "legendFormat": "{{collector}}"
                       }
                     }
                   }
@@ -16231,7 +16997,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -16275,7 +17041,7 @@
         "spec": {
           "id": 131,
           "title": "Time since last successful scrape",
-          "description": "Compare with the scheduled collector interval. Until the first success this counts from process start. Admin staleness instead measures time since the last attempt. Missing is not zero staleness.",
+          "description": "Compare with the scheduled collector interval.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16303,7 +17069,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{collector}}"
+                        "legendFormat": "{{collector}}"
                       }
                     }
                   }
@@ -16321,7 +17087,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -16365,7 +17131,7 @@
         "spec": {
           "id": 132,
           "title": "Teams Graph throttle response rate",
-          "description": "Only the Teams-specific call records and phone workload buckets. Shared reporting and other Graph workloads cannot be attributed to Teams here. An empty plot may mean no throttles or too few samples to calculate a rate; it is not a health verdict.",
+          "description": "Only the Teams-specific call records and phone workload buckets.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16393,7 +17159,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{workload}}"
+                        "legendFormat": "{{workload}}"
                       }
                     }
                   }
@@ -16411,7 +17177,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -16455,7 +17221,7 @@
         "spec": {
           "id": 133,
           "title": "Call versions skipped by metrics admission rate",
-          "description": "Rate of versions skipped by metrics admission, not a measure of Graph collection failure. An empty plot may mean no skipped versions, no calls or too few counter samples.",
+          "description": "Rate of versions skipped by metrics admission, not a measure of Graph collection failure.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -16483,7 +17249,7 @@
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{reason_bucket}}"
+                        "legendFormat": "{{reason_bucket}}"
                       }
                     }
                   }
@@ -16501,7 +17267,7 @@
               "options": {
                 "legend": {
                   "displayMode": "table",
-                  "placement": "bottom",
+                  "placement": "right",
                   "showLegend": true,
                   "calcs": [
                     "lastNotNull",
@@ -16535,6 +17301,376 @@
                   }
                 },
                 "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-2001": {
+        "kind": "Panel",
+        "spec": {
+          "id": 2001,
+          "title": "Pick a call",
+          "description": "Click a call ID to load its details below. Filters above narrow the list.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if and .call_id (eq \"${site:percentencode}\" \"\")}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${health:percentencode}\" \"\"}}yes{{else}}{{if (eq (.call_health | urlquery | replace \"+\" \"%20\") \"${health:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${call_type:percentencode}\" \"\"}}yes{{else}}{{if (eq (.call_type | urlquery | replace \"+\" \"%20\") \"${call_type:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${modality:percentencode}\" \"\"}}yes{{else}}{{range fromJson .modalities}}{{if eq (. | urlquery | replace \"+\" \"%20\") \"${modality:percentencode}\"}}yes{{break}}{{end}}{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}yes{{else}}{{if (eq (.organizer_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${min_seconds:percentencode}\" \"\"}}yes{{else if and (eq (regexReplaceAll \"^[0-9]+$\" \"${min_seconds:percentencode}\" \"\") \"\") .duration_seconds (ge (float64 .duration_seconds) (float64 \"${min_seconds:percentencode}\"))}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | tenant_id!=`` | keep tenant_id, call_id, version, call_health, call_type, modalities, participant_count, poor_stream_count, organizer_user_principal_name, duration_seconds, start_time, end_time",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 250
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if and .call_id (eq \"${site:percentencode}\" \"\")}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${health:percentencode}\" \"\"}}yes{{else}}{{if (eq (.call_health | urlquery | replace \"+\" \"%20\") \"${health:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${call_type:percentencode}\" \"\"}}yes{{else}}{{if (eq (.call_type | urlquery | replace \"+\" \"%20\") \"${call_type:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${modality:percentencode}\" \"\"}}yes{{else}}{{range fromJson .modalities}}{{if eq (. | urlquery | replace \"+\" \"%20\") \"${modality:percentencode}\"}}yes{{break}}{{end}}{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}yes{{else}}{{if (eq (.organizer_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${min_seconds:percentencode}\" \"\"}}yes{{else if and (eq (regexReplaceAll \"^[0-9]+$\" \"${min_seconds:percentencode}\" \"\") \"\") .duration_seconds (ge (float64 .duration_seconds) (float64 \"${min_seconds:percentencode}\"))}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | tenant_id=`` | label_format g2o_unlabelled_call_id=call_id | keep g2o_unlabelled_call_id, version, call_health, call_type, modalities, participant_count, poor_stream_count, organizer_user_principal_name, duration_seconds, start_time, end_time",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 250
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "convertFieldType",
+                  "spec": {
+                    "options": {
+                      "conversions": [
+                        {
+                          "targetField": "duration_seconds",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "participant_count",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "poor_stream_count",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "version",
+                          "destinationType": "number"
+                        },
+                        {
+                          "targetField": "start_time",
+                          "destinationType": "time"
+                        },
+                        {
+                          "targetField": "end_time",
+                          "destinationType": "time"
+                        }
+                      ],
+                      "fields": {}
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      },
+                      "indexByName": {
+                        "start_time": 0,
+                        "call_id": 1,
+                        "g2o_unlabelled_call_id": 2,
+                        "call_health": 3,
+                        "call_type": 4,
+                        "modalities": 5,
+                        "duration_seconds": 6,
+                        "participant_count": 7,
+                        "poor_stream_count": 8,
+                        "organizer_user_principal_name": 9,
+                        "end_time": 10,
+                        "version": 11,
+                        "tenant_id": 12
+                      },
+                      "renameByName": {
+                        "start_time": "Start",
+                        "call_health": "Health",
+                        "call_type": "Type",
+                        "modalities": "Modalities",
+                        "duration_seconds": "Duration",
+                        "participant_count": "Participants",
+                        "poor_stream_count": "Poor streams",
+                        "organizer_user_principal_name": "Organiser",
+                        "end_time": "End",
+                        "version": "Version"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Start",
+                    "desc": true
+                  }
+                ],
+                "enablePagination": true,
+                "zebraStriping": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No data yet. No call record matched the filters in this range. Teams publishes a call record after the call ends, sometimes hours later. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "g2o_unlabelled_call_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call ID (tenant unavailable)"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call ID"
+                      },
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Call detail",
+                            "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Health"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      },
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "text": "Good",
+                                "index": 0
+                              },
+                              "poor": {
+                                "color": "red",
+                                "text": "Poor",
+                                "index": 1
+                              },
+                              "unclassified": {
+                                "color": "#8e8e8e",
+                                "text": "Unclassified",
+                                "index": 2
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Duration"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Poor streams"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-text"
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "text",
+                              "value": null
+                            },
+                            {
+                              "color": "red",
+                              "value": 1
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Organiser"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Investigate this organiser",
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -17409,7 +18545,35 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "",
+                        "title": "Pick a call",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-2001"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Call evidence",
                         "collapse": false,
                         "layout": {
                           "kind": "GridLayout",
@@ -17587,7 +18751,24 @@
                             ]
                           }
                         },
-                        "hideHeader": true
+                        "hideHeader": false,
+                        "conditionalRendering": {
+                          "kind": "ConditionalRenderingGroup",
+                          "spec": {
+                            "visibility": "show",
+                            "condition": "and",
+                            "items": [
+                              {
+                                "kind": "ConditionalRenderingVariable",
+                                "spec": {
+                                  "variable": "call_id",
+                                  "operator": "notEquals",
+                                  "value": ""
+                                }
+                              }
+                            ]
+                          }
+                        }
                       }
                     }
                   ]

@@ -2,15 +2,14 @@
 
 import unittest
 
-import catalog
 import v2
-from boards import teams
+import build_dashboard
 
 
 class TeamsVoiceAppsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        _, manifest = teams.build(catalog.load())
+        manifest = build_dashboard.load_teams()
         spec = manifest["spec"]
         tab = next(t for t in spec["layout"]["spec"]["tabs"] if t["spec"]["title"] == "Auto attendant and call queue")
         cls.panels = {panel["title"]: panel for panel in (

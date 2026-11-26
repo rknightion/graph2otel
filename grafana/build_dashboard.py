@@ -43,7 +43,7 @@ import catalog as catalog_mod  # noqa: E402
 import pivots  # noqa: E402
 import presentation  # noqa: E402
 import v2  # noqa: E402
-from boards import common, teams  # noqa: E402
+from boards import common  # noqa: E402
 from builder import (  # noqa: E402
     CENSUS_SENTINEL,
     DASHBOARD_NAME,
@@ -55,7 +55,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 OUT_DIR = os.path.join(REPO, "dashboards")
 OUT_FILE = f"{DASHBOARD_NAME}.json"
-TEAMS_OUT_FILE = f"{teams.NAME}.json"
+TEAMS_NAME = "graph2otel-teams"
+TEAMS_OUT_FILE = f"{TEAMS_NAME}.json"
+TEAMS_PACKAGES = ("internal/collectors/m365/teams/", "internal/collectors/m365/teamsphone/",
+                  "internal/collectors/m365/teamsusage/", "internal/collectors/m365/servicehealth/")
 WAIVERS = os.path.join(HERE, "waivers.json")
 
 # One dashboard, one tab per board module, in tab order (#399). Self-obs last:
@@ -149,7 +152,7 @@ def overview(b: Builder) -> dict:
                    h=10)
     guide.setdefault("links", []).append({
         "title": "Open Teams dashboard",
-        "url": (f"/d/{teams.NAME}?dtab=overview&from=${{__from}}&to=${{__to}}"
+        "url": (f"/d/{TEAMS_NAME}?dtab=overview&from=${{__from}}&to=${{__to}}"
                 "&${tenant:queryparam}&${datasource:queryparam}&${loki_datasource:queryparam}"),
     })
     how_to_pivot = b.text(pivots.PREAMBLE, title="Investigate one entity", h=10)
@@ -289,6 +292,35 @@ def log_coverage(cat, log_domains: set) -> list:
     return sorted(have_logs - log_domains)
 
 
+def load_teams() -> dict:
+    """The hand-maintained Teams dashboard, which the gates read but never write."""
+    with open(os.path.join(OUT_DIR, TEAMS_OUT_FILE)) as f:
+        return json.load(f)
+
+
+def teams_covered(cat, manifest) -> set:
+    """Catalog metrics named by a Prometheus query on a placed Teams panel."""
+    covered = set()
+    for name in v2.placed_element_names(manifest):
+        element = manifest["spec"]["elements"].get(name)
+        if element is None:
+            continue
+        for target in element["spec"]["data"]["spec"]["queries"]:
+            query = target["spec"]["query"]
+            if query["group"] == "prometheus":
+                covered |= cat.metrics_referenced_by(query["spec"]["expr"])
+    return covered
+
+
+def teams_coverage_violations(cat, manifest) -> list:
+    """Teams metrics, and the Teams-profile m365 ones, must reach a placed Teams panel."""
+    needed = {m.name for m in cat.metrics.values()
+              if m.domain == "teams" or (m.domain != "graph2otel" and any(
+                  p == prefix.rstrip("/") or p.startswith(prefix) for p in m.packages for prefix in TEAMS_PACKAGES))}
+    return [f"Teams dashboard is missing metric {name}"
+            for name in sorted(needed - teams_covered(cat, manifest))]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true",
@@ -302,22 +334,21 @@ def main() -> int:
     cat = catalog_mod.load(args.catalog)
     waivers = load_waivers()
     b, manifest, log_domains = build(cat)
-    teams_builder, teams_manifest = teams.build(cat)
-    covered = b.covered | teams_builder.covered
+    teams_manifest = load_teams()
+    covered = b.covered | teams_covered(cat, teams_manifest)
 
     violations = (gate_violations(cat, b, manifest)
-                  + teams_builder.violations
                   + v2.manifest_violations(teams_manifest)
                   + presentation.manifest_violations(teams_manifest, check_registry=False)
                   + leaf_budget_violations(teams_manifest, {})
-                  + teams.coverage_violations(cat, teams_manifest))
+                  + teams_coverage_violations(cat, teams_manifest))
     if violations:
         print("dashboard build violations:", file=sys.stderr)
         for v in violations:
             print(f"  - {v}", file=sys.stderr)
         return 1
 
-    outputs = {OUT_FILE: manifest, TEAMS_OUT_FILE: teams_manifest}
+    outputs = {OUT_FILE: manifest}
     if not args.check and args.catalog == catalog_mod.CATALOGUE:
         os.makedirs(OUT_DIR, exist_ok=True)
         for filename, dashboard in outputs.items():
