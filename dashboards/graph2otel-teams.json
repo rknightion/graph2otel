@@ -6690,6 +6690,154 @@
           }
         }
       },
+      "panel-1042": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1042,
+          "title": "Visible call evidence at the selected site",
+          "description": "Counts the matching stream rows Loki returns, by stream start, not the capped table below. Every counted row has the exact site on either side and has a tenant, call ID and version. The optional user can match either side of that same row. Versions are distinct per call and tenant. Repeated observations count as rows, not as new versions, distinct streams or people. This is not a census of all calls at the site. Rows without a tenant or version can still appear below. Loki can silently shorten the requested time range. This table covers only evidence Loki returns; choose a shorter range or fewer tenants if the query reports a limit.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "label_replace(count by (tenant_id) (count by (tenant_id, call_id) (sum by (tenant_id, call_id, version) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | call_id!=`` | label_format g2o_match=`{{if eq \"${site:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_site | urlquery | replace \"+\" \"%20\") \"${site:percentencode}\") (eq (.callee_site | urlquery | replace \"+\" \"%20\") \"${site:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}yes{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if ne \"${site:percentencode}\" \"unmapped\"}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | tenant_id!=`` | version=~`[1-9][0-9]*` | keep tenant_id, call_id, version [$__range])))), \"g2o_measure\", \"Returned distinct call IDs\", \"g2o_measure\", \"^$\") or label_replace(count by (tenant_id) (sum by (tenant_id, call_id, version) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | call_id!=`` | label_format g2o_match=`{{if eq \"${site:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_site | urlquery | replace \"+\" \"%20\") \"${site:percentencode}\") (eq (.callee_site | urlquery | replace \"+\" \"%20\") \"${site:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}yes{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if ne \"${site:percentencode}\" \"unmapped\"}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | tenant_id!=`` | version=~`[1-9][0-9]*` | keep tenant_id, call_id, version [$__range]))), \"g2o_measure\", \"Returned distinct call versions\", \"g2o_measure\", \"^$\") or label_replace(sum by (tenant_id) (sum by (tenant_id, call_id, version) (count_over_time({service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | call_id!=`` | label_format g2o_match=`{{if eq \"${site:percentencode}\" \"\"}}{{else}}{{if or (eq (.caller_site | urlquery | replace \"+\" \"%20\") \"${site:percentencode}\") (eq (.callee_site | urlquery | replace \"+\" \"%20\") \"${site:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if eq \"${user:percentencode}\" \"\"}}yes{{else}}{{if or (eq (.caller_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\") (eq (.callee_user_principal_name | urlquery | replace \"+\" \"%20\") \"${user:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | label_format g2o_match=`{{if ne \"${site:percentencode}\" \"unmapped\"}}yes{{end}}` | g2o_match=\"yes\" | drop g2o_match | tenant_id!=`` | version=~`[1-9][0-9]*` | keep tenant_id, call_id, version [$__range]))), \"g2o_measure\", \"Returned stream observations\", \"g2o_measure\", \"^$\")",
+                        "editorMode": "code",
+                        "queryType": "instant"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "labelsToFields",
+                  "spec": {
+                    "options": {
+                      "mode": "columns",
+                      "valueLabel": "g2o_measure",
+                      "keepLabels": [
+                        "tenant_id",
+                        "g2o_measure"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      },
+                      "indexByName": {
+                        "tenant_id": 0,
+                        "Returned distinct call IDs": 1,
+                        "Returned distinct call versions": 2,
+                        "Returned stream observations": 3
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Returned distinct call IDs",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No data yet. Enter a named site. No keyed stream evidence returned; this is not proof of zero activity.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
       "panel-55": {
         "kind": "Panel",
         "spec": {
@@ -14791,8 +14939,8 @@
         "kind": "Panel",
         "spec": {
           "id": 122,
-          "title": "Distinct Teams issues observed open in range",
-          "description": "One row per tenant and issue ID. Counts stored open observations in the selected range, not currently open issues. Missing IDs are left in the history only.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "title": "Visible open observations by Teams issue",
+          "description": "One row per exact tenant and issue ID. Counts and dates use the open observations Loki returns, on the poll clock. They do not show issue start, resolution or whether it is still open. Rows without a tenant or issue ID remain in history. Loki can silently shorten the requested time range. This table covers only evidence Loki returns; choose a shorter range or fewer tenants if the query reports a limit.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -14816,7 +14964,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, id) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=`false` | keep tenant_id, id [$__range]))",
+                        "expr": "label_replace(sum by (tenant_id, id) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=`false` | tenant_id!=`` | keep tenant_id, id [$__range])), \"g2o_measure\", \"Returned open polls\", \"g2o_measure\", \"^$\") or label_replace(min_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=`false` | tenant_id!=`` | keep tenant_id, id | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id), \"g2o_measure\", \"Earliest returned open\", \"g2o_measure\", \"^$\") or label_replace(max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=`false` | tenant_id!=`` | keep tenant_id, id | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id), \"g2o_measure\", \"Latest returned open\", \"g2o_measure\", \"^$\")",
                         "editorMode": "code",
                         "queryType": "instant"
                       }
@@ -14828,15 +14976,24 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "reduce",
+                  "group": "labelsToFields",
                   "spec": {
                     "options": {
-                      "reducers": [
-                        "last"
-                      ],
-                      "mode": "seriesToRows",
-                      "labelsToFields": true
+                      "mode": "columns",
+                      "valueLabel": "g2o_measure",
+                      "keepLabels": [
+                        "tenant_id",
+                        "id",
+                        "g2o_measure"
+                      ]
                     }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "merge",
+                  "spec": {
+                    "options": {}
                   }
                 },
                 {
@@ -14845,15 +15002,14 @@
                   "spec": {
                     "options": {
                       "excludeByName": {
-                        "Field": true
+                        "Time": true
                       },
                       "indexByName": {
                         "tenant_id": 0,
                         "id": 1,
-                        "Last": 2
-                      },
-                      "renameByName": {
-                        "Last": "Polls seen open"
+                        "Returned open polls": 2,
+                        "Earliest returned open": 3,
+                        "Latest returned open": 4
                       }
                     }
                   }
@@ -14878,7 +15034,7 @@
                 },
                 "sortBy": [
                   {
-                    "displayName": "Polls seen open",
+                    "displayName": "Returned open polls",
                     "desc": true
                   }
                 ]
@@ -14887,7 +15043,7 @@
                 "defaults": {
                   "unit": "short",
                   "custom": {},
-                  "noValue": "No data yet. No keyed Teams issues were observed open in this range. Check the Loki datasource and service-health collector.",
+                  "noValue": "No data yet. No keyed open observations returned; this is not proof that no issues were open.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -14920,6 +15076,30 @@
                       {
                         "id": "noValue",
                         "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Earliest returned open"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Latest returned open"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
                       }
                     ]
                   }
@@ -17186,6 +17366,19 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 14,
+                                  "width": 24,
+                                  "height": 5,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1042"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 19,
                                   "width": 24,
                                   "height": 9,
                                   "element": {

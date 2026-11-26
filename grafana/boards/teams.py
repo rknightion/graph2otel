@@ -625,6 +625,62 @@ def _call_discovery(b, event, title, fields, *, filters, desc):
     _link(panel, "call_id", "Call detail", "call_id")
 
 
+def _log_measure_table(b, title, identity, measures, desc, empty, *, h=5, panel_id=None):
+    # Send one instant query so Loki either returns the measures together or
+    # reports an error. Each series has the same identity labels; the measure
+    # label names the value column, not another part of the identity.
+    expr = " or ".join(f'label_replace({expr}, "g2o_measure", "{name}", "g2o_measure", "^$")'
+                       for name, expr, _ in measures)
+    desc += (" Loki can silently shorten the requested time range. This table covers only evidence Loki returns; "
+             "choose a shorter range or fewer tenants if the query reports a limit.")
+    panel = b._viz_panel("table", title, [], "short", desc + _loki_note(), 24, h, panel_id=panel_id)
+    panel["datasource"] = LOKI_DS
+    panel["targets"] = [b._loki_query(expr, query_type="instant")]
+    columns = (*identity, *(name for name, _, _ in measures))
+    panel["transformations"] = [
+        {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "g2o_measure",
+                                             "keepLabels": [*identity, "g2o_measure"]}},
+        {"id": "merge", "options": {}},
+        {"id": "organize", "options": {
+            "excludeByName": {"Time": True},
+            "indexByName": {name: i for i, name in enumerate(columns)},
+        }},
+    ]
+    panel["options"]["sortBy"] = [{"displayName": measures[0][0], "desc": True}]
+    panel["fieldConfig"]["defaults"]["noValue"] = empty
+    for kind in ("string", "number"):
+        panel["fieldConfig"]["overrides"].append({"matcher": {"id": "byType", "options": kind},
+                                                   "properties": [{"id": "noValue", "value": ""}]})
+    for name, _, unit in measures:
+        if unit != "short":
+            _override(panel, name, "unit", unit)
+    return panel
+
+
+def _site_call_evidence(b, site_filters):
+    version_key = ("tenant_id", "call_id", "version")
+    group = ", ".join(version_key)
+    named = _require(f'{{{{if ne {_literal("site")} "unmapped"}}}}yes{{{{end}}}}',
+                     ["caller_site", "callee_site"], "A lookup miss is not a named site")
+    streams = b._selector(STREAM, filters=[
+        *site_filters, named, f("tenant_id", "ne", ""), f("version", "re", "[1-9][0-9]*"),
+        Raw(f"keep {group}", keys=version_key, reason="Project exact version identity before counting stored rows"),
+    ], by=list(version_key))
+    versions = f"sum by ({group}) (count_over_time({streams} [$__range]))"
+    calls = f"count by (tenant_id, call_id) ({versions})"
+    _log_measure_table(b, "Visible call evidence at the selected site", ("tenant_id",), (
+        ("Returned distinct call IDs", f"count by (tenant_id) ({calls})", "short"),
+        ("Returned distinct call versions", f"count by (tenant_id) ({versions})", "short"),
+        ("Returned stream observations", f"sum by (tenant_id) ({versions})", "short"),
+    ), "Counts the matching stream rows Loki returns, by stream start, not the capped table below. "
+       "Every counted row has the exact site on either side and has a tenant, call ID and version. "
+       "The optional user can match either side of that same row. Versions are distinct per call and tenant. "
+       "Repeated observations count as rows, not as new versions, distinct streams or people. This is not a census "
+       "of all calls at the site. Rows without a tenant or version can still appear below.",
+       "Enter a named site. No keyed stream evidence returned; this is not proof of zero activity.",
+       panel_id=1042)
+
+
 def calls(b):
     b.text("**Find a call:** clear Site search and use health, type, modality, organiser UPN or minimum duration. "
            "For example, set health to `poor` and modality to `audio`. Text inputs match exact values.\n\n"
@@ -643,10 +699,12 @@ def calls(b):
                 _matches("modality", "modalities", json_list=True),
                 _matches("user", "organizer_user_principal_name"), _duration()],
         desc="One row per observed call version. Poor streams are not a count of affected participants.")
+    site_filters = (f("call_id", "ne", ""), _matches("site", "caller_site", "callee_site", required=True),
+                    _matches("user", "caller_user_principal_name", "callee_user_principal_name"))
+    _site_call_evidence(b, site_filters)
     _call_discovery(b, STREAM, "Call IDs observed at the selected site", (
         "version", "stream_id", "caller_site", "callee_site", "media", "stream_health",
-    ), filters=[f("call_id", "ne", ""), _matches("site", "caller_site", "callee_site", required=True),
-                _matches("user", "caller_user_principal_name", "callee_user_principal_name")],
+    ), filters=site_filters,
         desc="One row per matching stream observation, not a joined call summary. A call can appear more than once.")
 
 
@@ -1258,15 +1316,21 @@ def issues(b):
     key = ", ".join(identity)
     teams_only = f("service", "eq", "Microsoft Teams")
     keyed = [teams_only, f("id", "ne", "")]
-    open_only = b._selector(ISSUE, filters=[*keyed, f("is_resolved", "eq", "false"), Raw(
-        f"keep {key}", keys=identity, reason="Discard mutable metadata before counting keyed observations")],
-        by=list(identity))
-    count = f"sum by ({key}) (count_over_time({open_only} [$__range]))"
-    _observation_table(b, "Distinct Teams issues observed open in range", count, identity,
-                   "Polls seen open", "short",
-                   "One row per tenant and issue ID. Counts stored open observations in the selected range, "
-                   "not currently open issues. Missing IDs are left in the history only.",
-                   "No keyed Teams issues were observed open in this range. Check the Loki datasource and service-health collector.")
+    open_key = [*keyed, f("is_resolved", "eq", "false"), f("tenant_id", "ne", ""), Raw(
+        f"keep {key}", keys=identity, reason="Discard mutable metadata before grouping open observations")]
+    open_only = b._selector(ISSUE, filters=open_key, by=list(identity))
+    open_ms = b._selector(ISSUE, filters=[*open_key, Raw(
+        "label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms",
+        keys=identity, reason="Use the stored open observation time, not the issue's start or last modified date")])
+    _log_measure_table(b, "Visible open observations by Teams issue", identity, (
+        ("Returned open polls", f"sum by ({key}) (count_over_time({open_only} [$__range]))", "short"),
+        ("Earliest returned open", f"min_over_time({open_ms} [$__range]) by ({key})", "dateTimeAsIso"),
+        ("Latest returned open", f"max_over_time({open_ms} [$__range]) by ({key})", "dateTimeAsIso"),
+    ), "One row per exact tenant and issue ID. Counts and dates use the open observations Loki returns, on the "
+       "poll clock. They do not show issue start, resolution or whether it is still open. "
+       "Rows without a tenant or issue ID remain in history.",
+       "No keyed open observations returned; this is not proof that no issues were open.",
+       h=7)
     fields = (*identity, "title", "status", "classification", "is_resolved")
     grouped = ", ".join(fields)
     observed = b._selector(ISSUE, filters=[*keyed, f("is_resolved", "re", "true|false"), Raw(
