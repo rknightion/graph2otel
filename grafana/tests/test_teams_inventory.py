@@ -9,11 +9,11 @@ from pathlib import Path
 
 import catalog
 import v2
-from boards import teams
+import build_dashboard
 
 
 def inventory_panels(cat):
-    _, manifest = teams.build(cat)
+    manifest = build_dashboard.load_teams()
     tab = next(tab for tab in manifest["spec"]["layout"]["spec"]["tabs"]
                if tab["spec"]["title"] == "Phone inventory")
     names = v2.placed_element_names({"spec": {"layout": {"spec": {"tabs": [tab]}}}})

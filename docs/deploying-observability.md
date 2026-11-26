@@ -6,7 +6,7 @@ directory. The generated inventory is drift-gated at
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
-| `dashboards/` | 2 dashboards (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
+| `dashboards/` | 2 dashboards (Graph **generated**, Teams hand-maintained) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
 | `alerts/rules/` | 27 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
 | `alerts/rules/` | 11 detection examples (**generated**, all **paused**) | same, separate rule group | `graph2otel detections` |
 
@@ -72,12 +72,16 @@ absent census means *unknown*, never *disabled*, so the dashboard must not rende
 blank without explanation. The `Overview` tab is never conditional for the same
 reason.
 
-### They are GENERATED — do not hand-edit them
+### The Graph dashboard is GENERATED — do not hand-edit it
 
-The manifests are built by `grafana/build_dashboard.py` from
+`dashboards/graph2otel.json` is built by `grafana/build_dashboard.py` from
 `grafana/boards/*.py` and `spec/signal-catalog.json`, and `just grafana-check`
 (a required CI leg) fails on a hand-edited file. To change a panel, edit the
-board module and run `just dashboard`. See
+board module and run `just dashboard`.
+
+`dashboards/graph2otel-teams.json` is hand-maintained: edit the JSON directly.
+`just grafana-check` still gates its v2 structure, its Teams metric coverage and
+its datasource portability. See
 [`grafana/AUTHORING.md`](https://github.com/rknightion/graph2otel/blob/main/grafana/AUTHORING.md).
 
 The same gate fails when a metric graph2otel emits reaches no panel at all, so

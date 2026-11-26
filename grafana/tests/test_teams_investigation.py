@@ -81,7 +81,7 @@ class TeamsInvestigationTests(unittest.TestCase):
                 ("call", "teams_calls_total", "call_health", "Good"),
                 ("stream", "teams_streams_total", "stream_health", "Poor")):
             with self.subTest(population=noun):
-                summary = panel(f"Initial {noun} verdict coverage (processing time)")
+                summary = panel(f"{noun.capitalize()} verdicts in range")
                 renames = next(t["spec"]["options"]["renameByName"]
                                for t in summary["data"]["spec"]["transformations"] if t["group"] == "organize")
 
@@ -191,8 +191,9 @@ class TeamsInvestigationLogQLTests(unittest.TestCase):
                 rows = [{**base, **tenant} for tenant in tenants]
                 rows += [{**base, **tenants[0], **decoy, "version": str(i)} for i, decoy in enumerate(decoys, 2)]
                 spec = panel(title)
-                [linked] = [o["matcher"]["options"] for o in spec["vizConfig"]["spec"]["fieldConfig"]["overrides"]
-                            if any(p["id"] == "links" for p in o["properties"])]
+                linked = "call_id"
+                self.assertIn(linked, [o["matcher"]["options"] for o in spec["vizConfig"]["spec"]["fieldConfig"]["overrides"]
+                                       if any(p["id"] == "links" for p in o["properties"])])
                 columns = ("tenant_id", linked, "g2o_unlabelled_call_id", "version")
                 targets = query_models(spec)
                 self.assertTrue(all(q["queryType"] == "range" and q["maxLines"] == 250 for q in targets))

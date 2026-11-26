@@ -1,7 +1,8 @@
 # Authoring graph2otel's dashboards
 
-The JSON in `dashboards/` is **generated**. Do not edit it - `just grafana-check`
+`dashboards/graph2otel.json` is **generated**. Do not edit it - `just grafana-check`
 fails on a hand-edited file. Edit `grafana/boards/*.py` and run `just dashboard`.
+`dashboards/graph2otel-teams.json` is the exception: it is hand-maintained JSON.
 
 The Graph board is a Grafana **v2 dynamic dashboard** (`dashboard.grafana.app/v2`,
 Grafana 13+): a root `TabsLayout` of seven tabs, each domain tab a nested `TabsLayout`
@@ -10,13 +11,15 @@ tab**, and its panels are packed into a 24-column grid — so a board module sti
 declares rows of panels and never writes a coordinate, a tab, or a layout kind.
 
 ```sh
-just dashboard       # regenerate both v2 dashboards
+just dashboard       # regenerate the Graph v2 dashboard
 just grafana-check   # the gate: coverage + log coverage + freshness + structure
 ```
 
-`boards/teams.py` builds a separate, unconditional Teams dashboard so a Teams-only
-install need not open the Graph board. It uses the same catalogue and schema, but
-its own tabs and variables. The gate requires every `teams` metric on a placed
+The Teams dashboard is a separate, unconditional, hand-edited v2 dashboard so a
+Teams-only install need not open the Graph board. Edit `dashboards/graph2otel-teams.json`
+directly, in Grafana or by hand, and keep 2-space indentation. Every query datasource
+must be `${datasource}` or `${loki_datasource}`, never a stack's UID. The gate checks
+its v2 structure and requires every `teams` metric on a placed
 Teams panel even if the Graph board already shows it. Site and call links carry
 the row tenant rather than reusing a multi-tenant selection. Every site-labelled metric
 follows the `sites` dropdown, whose All value is `.*` so streams without a mapped site

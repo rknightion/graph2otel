@@ -76,7 +76,7 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
         self.assertIn(expected, docs)
         self.assertIn(expected, readme)
         self.assertIn(
-            f"| `dashboards/` | {dashboard_count} {noun} (**generated**)",
+            f"| `dashboards/` | {dashboard_count} {noun} (Graph **generated**, Teams hand-maintained)",
             docs,
         )
         # Both stable dashboard identities must remain documented.

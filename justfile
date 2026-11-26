@@ -200,7 +200,7 @@ gen: regen dashboard rules helm-docs
 regen target="all":
     ./scripts/regen-generated.sh '{{ target }}'
 
-# regenerate dashboards/graph2otel.json from grafana/boards/*.py
+# regenerate dashboards/graph2otel.json from grafana/boards/*.py (the Teams board is hand-maintained)
 [group('gen')]
 [working-directory('grafana')]
 dashboard:
