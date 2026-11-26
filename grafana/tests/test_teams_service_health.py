@@ -36,11 +36,19 @@ class TeamsHealthTests(unittest.TestCase):
         panel = next(p for p in _tab("Service health") if p["title"] == "Latest Teams issue observations in range")
         data = panel["data"]["spec"]
         self.assertEqual(data["queries"][0]["spec"]["query"]["spec"]["queryType"], "instant")
-        self.assertEqual(panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]["unit"], "dateTimeAsIso")
-        reduce = next(t for t in data["transformations"] if t["group"] == "reduce")
-        self.assertTrue(reduce["spec"]["options"]["labelsToFields"])
+        field_config = panel["vizConfig"]["spec"]["fieldConfig"]
+        # A default date unit formats the label columns too and renders them as NaN; only the
+        # observation time carries it.
+        self.assertNotIn("unit", field_config["defaults"])
+        observed = [o for o in field_config["overrides"] if o["matcher"] == {"id": "byName", "options": "Observation time"}]
+        self.assertIn({"id": "unit", "value": "dateTimeAsIso"}, observed[0]["properties"])
+        # Grafana 13 renders reduce(seriesToRows) over Loki instant series as one NaN column.
+        groups = [t["group"] for t in data["transformations"]]
+        self.assertNotIn("reduce", groups)
+        self.assertEqual(groups[:2], ["labelsToFields", "merge"])
         organize = next(t for t in data["transformations"] if t["group"] == "organize")
-        self.assertLessEqual({"tenant_id", "id", "title", "status"}, organize["spec"]["options"]["indexByName"].keys())
+        self.assertLessEqual({"tenant_id", "id", "title", "status", "Value #A"}, organize["spec"]["options"]["indexByName"].keys())
+        self.assertEqual(organize["spec"]["options"]["renameByName"]["Value #A"], "Observation time")
 
     @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
     def test_cadence_uses_newest_sample_and_does_not_guess_at_ties(self):
