@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.0](https://github.com/rknightion/graph2otel/compare/v2.2.0...v2.3.0) (2026-11-26)
+
+
+### Features
+
+* **admin:** restyle the embedded console onto design system v2 ([#781](https://github.com/rknightion/graph2otel/issues/781)) ([ef7d8ef](https://github.com/rknightion/graph2otel/commit/ef7d8ef1da4c5a0746c6222471fdadacfc60fb36))
+* map Teams meeting, call, app and join detail on m365.audit ([#779](https://github.com/rknightion/graph2otel/issues/779)) ([1823f4d](https://github.com/rknightion/graph2otel/commit/1823f4dbfd04ef10ec6e55842a9c452b891afa42))
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/microsoft/kiota-http-go to v1.7.1 ([#788](https://github.com/rknightion/graph2otel/issues/788)) ([683c44b](https://github.com/rknightion/graph2otel/commit/683c44b961c4830dec371eb64720a244747fd29f))
+* publish the export throttle exhausted counter at 0 so a repeat after a restart fires ([#780](https://github.com/rknightion/graph2otel/issues/780)) ([e0fd5b9](https://github.com/rknightion/graph2otel/commit/e0fd5b90cf7d7dccc8eb03871c19f29b757a8bdc))
+
 ## [2.2.0](https://github.com/rknightion/graph2otel/compare/v2.1.1...v2.2.0) (2026-11-26)
 
 
