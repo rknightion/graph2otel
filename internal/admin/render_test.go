@@ -216,17 +216,18 @@ func TestRender_AvailabilityBadgesCoverEveryBoundedStateAndGenericReason(t *test
 	cases := []struct {
 		state availability.State
 		class string
+		glyph string // sprite id: every state carries a shape or icon, never color alone
 	}{
-		{availability.StateDisabled, "muted"},
-		{availability.StateBlocked, "err"},
-		{availability.StateCovered, "info"},
-		{availability.StateStarting, "pending"},
-		{availability.StateHealthyEmpty, "ok"},
-		{availability.StateHealthy, "ok"},
-		{availability.StateLimited, "warn"},
-		{availability.StateDegraded, "warn"},
-		{availability.StateFailed, "err"},
-		{availability.StateStartupFailed, "err"},
+		{availability.StateDisabled, "muted", "s-ring"},
+		{availability.StateBlocked, "err", "i-prohibit"},
+		{availability.StateCovered, "info", "i-arrows-split"},
+		{availability.StateStarting, "pending", "s-ring"},
+		{availability.StateHealthyEmpty, "ok", "s-circle"},
+		{availability.StateHealthy, "ok", "s-circle"},
+		{availability.StateLimited, "warn", "i-warning"},
+		{availability.StateDegraded, "warn", "i-warning"},
+		{availability.StateFailed, "err", "i-warning-circle"},
+		{availability.StateStartupFailed, "err", "i-warning-circle"},
 	}
 	rows := make([]CollectorStatus, 0, len(cases))
 	for _, tc := range cases {
@@ -252,7 +253,7 @@ func TestRender_AvailabilityBadgesCoverEveryBoundedStateAndGenericReason(t *test
 	})
 
 	for _, tc := range cases {
-		want := fmt.Sprintf(`class="badge %s">%s</span>`, tc.class, tc.state)
+		want := fmt.Sprintf(`class="badge %s" data-state="%s"><svg class="gl" aria-hidden="true"><use href="#%s"/></svg>%s</span>`, tc.class, tc.state, tc.glyph, tc.state)
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing bounded %q state badge %q", tc.state, want)
 		}

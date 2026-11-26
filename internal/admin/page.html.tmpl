@@ -3,122 +3,325 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preload" href="/_static/fonts/hanken-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
 <title>graph2otel — status</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%234493f8'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%231d6a8a'/%3E%3C/svg%3E">
 <style>
-  :root{
-    --bg:#0f1419; --panel:#171c24; --panel2:#1d242e; --line:#2a323d;
-    --fg:#e6edf3; --muted:#8b98a5; --accent:#4493f8;
-    --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7; --pending:#6e7681;
-    --grid:#232a34;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+/* ─────────────────────────────────────────────────────────────────────────────
+   m7kni Design System v2 - 2otel console family token block.
+   SHARED VERBATIM across tailscale2otel, opnsense2otel, graph2otel,
+   codexlb2otel. Do not edit in one repo only. Generated from
+   packages/tokens (DTCG) - hex values are the resolved sRGB of the oklch
+   sources noted per line.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  /* Type */
+  --t2o-sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --t2o-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --t2o-fs-2xs:10px;   /* uppercase micro labels */
+  --t2o-fs-xs:11px;    /* mono sub-values, notes, badges */
+  --t2o-fs-sm:12.5px;  /* table cells, controls, machine text */
+  --t2o-fs-md:13.5px;  /* body copy */
+  --t2o-fs-lg:15px;    /* page title, card values */
+  --t2o-fs-xl:18px;    /* posture values */
+  --t2o-fs-2xl:24px;   /* rare, one per page at most */
+  --t2o-fw-regular:400;
+  --t2o-fw-medium:500;
+  --t2o-fw-semibold:600;
+  --t2o-tracking-label:0.13em;
+
+  /* Space and shape */
+  --t2o-space-1:4px;  --t2o-space-2:8px;  --t2o-space-3:12px;
+  --t2o-space-4:16px; --t2o-space-5:20px; --t2o-space-6:24px;
+  --t2o-radius-control:3px;    /* buttons, inputs, chips, badges */
+  --t2o-radius-container:0px;  /* panels, cards, tables - square */
+  --t2o-radius-overlay:6px;    /* tooltips, popovers */
+  --t2o-row:36px;              /* table row height */
+  --t2o-dur-fast:120ms; --t2o-dur-base:160ms;
+
+  /* Light theme - the default */
+  --t2o-bg:#eef3f6;            /* oklch(0.962 0.007 227) */
+  --t2o-surface:#f6fafb;       /* oklch(0.982 0.004 227) */
+  --t2o-raised:#ffffff;        /* oklch(1 0 0) - table headers, inputs */
+  --t2o-hover:#e7eef1;         /* oklch(0.945 0.009 227) */
+  --t2o-selected:#dee8ec;      /* oklch(0.925 0.012 227) */
+  --t2o-track:#c7cfd3;         /* oklch(0.85 0.01 227) - bar troughs */
+  --t2o-fg:#192124;            /* oklch(0.24 0.012 227) */
+  --t2o-fg-soft:#384146;       /* oklch(0.37 0.015 227) */
+  --t2o-fg-muted:#59666b;      /* oklch(0.5 0.018 227) */
+  --t2o-fg-faint:#869196;      /* oklch(0.65 0.015 227) - placeholder/disabled ONLY */
+  --t2o-accent:#1d6a8a;        /* petrol */
+  --t2o-accent-hover:#175874;
+  --t2o-accent-soft:#e4eef4;   /* banner and selected-row wash */
+  --t2o-on-accent:#ffffff;
+  --t2o-line:#d9dfe2;          /* oklch(0.9 0.008 227) */
+  --t2o-line-strong:#bec5c9;   /* oklch(0.82 0.01 227) */
+  --t2o-ok:#2f7d4f;
+  --t2o-warn:#8f6410;
+  --t2o-fail:#a83a2e;
+
+  /* Direction pair - see section 7 */
+  --t2o-tx:var(--t2o-accent);
+  --t2o-rx:var(--t2o-fg);
+}
+
+/* No stored preference: follow the OS. Explicit data-theme always wins. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]){
+    --t2o-bg:#101618; --t2o-surface:#161d20; --t2o-raised:#1e2529;
+    --t2o-hover:#1b2225; --t2o-selected:#222a2e; --t2o-track:#373f42;
+    --t2o-fg:#e1e5e8; --t2o-fg-soft:#b7bfc3; --t2o-fg-muted:#95a1a6; --t2o-fg-faint:#697478;
+    --t2o-accent:#66aecb; --t2o-accent-hover:#7cbcd6; --t2o-accent-soft:#1f2f38;
+    --t2o-on-accent:#0e161b;
+    --t2o-line:#2a3235; --t2o-line-strong:#40494e;
+    --t2o-ok:#5fae7f; --t2o-warn:#c9a04a; --t2o-fail:#d97b64;
   }
-  @media (prefers-color-scheme: light){
-    :root:not([data-theme]){
-      --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --line:#d0d7de;
-      --fg:#1f2328; --muted:#59636e; --accent:#0969da;
-      --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#8250df; --pending:#8c959f;
-      --grid:#e4e8ec;
-    }
-  }
-  :root[data-theme="light"]{
-    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --line:#d0d7de;
-    --fg:#1f2328; --muted:#59636e; --accent:#0969da;
-    --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#8250df; --pending:#8c959f;
-    --grid:#e4e8ec;
-  }
-  :root[data-theme="dark"]{
-    --bg:#0f1419; --panel:#171c24; --panel2:#1d242e; --line:#2a323d;
-    --fg:#e6edf3; --muted:#8b98a5; --accent:#4493f8;
-    --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7; --pending:#6e7681;
-    --grid:#232a34;
-  }
+}
+:root[data-theme="light"]{
+  --t2o-bg:#eef3f6; --t2o-surface:#f6fafb; --t2o-raised:#ffffff;
+  --t2o-hover:#e7eef1; --t2o-selected:#dee8ec; --t2o-track:#c7cfd3;
+  --t2o-fg:#192124; --t2o-fg-soft:#384146; --t2o-fg-muted:#59666b; --t2o-fg-faint:#869196;
+  --t2o-accent:#1d6a8a; --t2o-accent-hover:#175874; --t2o-accent-soft:#e4eef4;
+  --t2o-on-accent:#ffffff;
+  --t2o-line:#d9dfe2; --t2o-line-strong:#bec5c9;
+  --t2o-ok:#2f7d4f; --t2o-warn:#8f6410; --t2o-fail:#a83a2e;
+}
+:root[data-theme="dark"]{
+  --t2o-bg:#101618; --t2o-surface:#161d20; --t2o-raised:#1e2529;
+  --t2o-hover:#1b2225; --t2o-selected:#222a2e; --t2o-track:#373f42;
+  --t2o-fg:#e1e5e8; --t2o-fg-soft:#b7bfc3; --t2o-fg-muted:#95a1a6; --t2o-fg-faint:#697478;
+  --t2o-accent:#66aecb; --t2o-accent-hover:#7cbcd6; --t2o-accent-soft:#1f2f38;
+  --t2o-on-accent:#0e161b;
+  --t2o-line:#2a3235; --t2o-line-strong:#40494e;
+  --t2o-ok:#5fae7f; --t2o-warn:#c9a04a; --t2o-fail:#d97b64;
+}
+
+/* ── Compatibility aliases ───────────────────────────────────────────────────
+   The three templates already reference --bg/--panel/--line/... in hundreds of
+   places, including inside JS that writes `fill:"var(--rx)"` into SVG. Keeping
+   these aliases means the restyle lands as a palette swap plus targeted
+   per-page edits, not a rename sweep. New CSS should use the --t2o-* names.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  --bg:var(--t2o-bg);
+  --panel:var(--t2o-surface);
+  --panel2:var(--t2o-raised);
+  --line:var(--t2o-line);
+  --fg:var(--t2o-fg);
+  --muted:var(--t2o-fg-muted);
+  --accent:var(--t2o-accent);
+  --ok:var(--t2o-ok);
+  --warn:var(--t2o-warn);
+  --err:var(--t2o-fail);
+  --pending:var(--t2o-fg-muted);
+  --grid:var(--t2o-line);
+  --tx:var(--t2o-tx);
+  --rx:var(--t2o-rx);
+  --mono:var(--t2o-mono);
+}
+@font-face{
+  font-family:"Hanken Grotesk";font-style:normal;font-weight:100 900;font-display:swap;
+  src:url("/_static/fonts/hanken-grotesk-latin.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:"Hanken Grotesk";font-style:normal;font-weight:100 900;font-display:swap;
+  src:url("/_static/fonts/hanken-grotesk-latin-ext.woff2") format("woff2");
+  unicode-range:U+0100-024F,U+0259,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20CF,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face{
+  font-family:"JetBrains Mono";font-style:normal;font-weight:100 800;font-display:swap;
+  src:url("/_static/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+}
+/* Family extensions recorded in design/console-v2/implementation-spec.md section 12
+   (small-chart standard, row marker). They sit AFTER the verbatim token block so
+   that block stays byte-identical across the four consoles. */
+:root{
+  --t2o-chart-grid:var(--t2o-line);
+  --t2o-chart-axis:var(--t2o-fg-muted);
+  --t2o-series-1:var(--t2o-accent);
+  --t2o-series-2:var(--t2o-fg);
+  --t2o-series-3:var(--t2o-warn);
+  --t2o-chart-area:0.10;
+  --t2o-chart-h:110px;
+  --t2o-chart-h-tall:150px;
+  --t2o-spark-w:100px;
+  --t2o-spark-h:22px;
+  --t2o-row-marker:2px;
+  --g2o-nav-h:40px;
+}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+@media (prefers-color-scheme: dark){:root:not([data-theme]){color-scheme:dark}}
+.t2o-row--alert>td:first-child{box-shadow:inset var(--t2o-row-marker) 0 0 var(--t2o-fail)}
+.t2o-row--note>td:first-child{box-shadow:inset var(--t2o-row-marker) 0 0 var(--t2o-accent)}
+
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-  code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 5px;border-radius:4px}
-  header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
-  header h1{margin:0;font-size:20px;font-weight:600}
-  header .ver{color:var(--muted);font-family:var(--mono);font-size:13px}
+  body{margin:0;background:var(--t2o-bg);color:var(--t2o-fg-soft);font:var(--t2o-fw-regular) var(--t2o-fs-md)/1.5 var(--t2o-sans)}
+  a{color:var(--t2o-accent);text-decoration:none} a:hover{text-decoration:underline;color:var(--t2o-accent-hover)}
+  code{font-family:var(--t2o-mono);font-size:var(--t2o-fs-sm);color:var(--t2o-fg)}
+  svg.gl{width:11px;height:11px;flex:none;display:inline-block;vertical-align:-1px}
+  header{padding:12px 20px;border-bottom:1px solid var(--t2o-line);background:var(--t2o-surface);display:flex;align-items:center;gap:var(--t2o-space-3);flex-wrap:wrap}
+  header h1{margin:0;font-size:var(--t2o-fs-lg);font-weight:var(--t2o-fw-semibold);color:var(--t2o-fg)}
+  header .ver{color:var(--t2o-fg-muted);font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs)}
   header .spacer{flex:1}
   main{max-width:1180px;margin:0 auto;padding:20px 24px 60px}
   /* Collectors breaks out of the centered column to ~90% of the viewport. */
   .wide{width:92vw;max-width:92vw;margin-left:calc(50% - 46vw)}
   section{margin:0 0 26px}
-  .sub-h{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:26px 0 12px;font-weight:600}
-  .sub-h .tsum{text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
-  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-  .card .k{color:var(--muted);font-size:12px;margin-bottom:6px}
-  .card .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
-  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;background:rgba(110,118,129,.18);color:var(--muted)}
-  .badge.ok{background:rgba(63,185,80,.16);color:var(--ok)}
-  .badge.err{background:rgba(248,81,73,.16);color:var(--err)}
-  .badge.warn{background:rgba(210,153,34,.16);color:var(--warn)}
-  .badge.info{background:rgba(163,113,247,.16);color:var(--info)}
-  .badge.pending,.badge.muted{background:rgba(110,118,129,.18);color:var(--muted)}
-  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px}
-  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:middle}
-  th{color:var(--muted);font-size:12px;font-weight:600;background:var(--panel2)}
-  tr:last-child td{border-bottom:0}
-  td.num{text-align:right;font-family:var(--mono)}
-  tr.bad>td{background:rgba(248,81,73,.07)} tr.skip>td{color:var(--muted)}
-  table.rl{max-width:640px}
-  .mono{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere} .muted{color:var(--muted)}
-  .cursor{display:block;font-size:11px;margin-top:3px;color:var(--muted)} .cursor code{background:transparent;padding:0}
-  svg.spark{width:84px;height:22px;vertical-align:middle;display:inline-block;fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
-  .chart-wrap{position:relative;height:120px;margin-top:8px}
+  .sub-h{font-size:var(--t2o-fs-2xs);text-transform:uppercase;letter-spacing:var(--t2o-tracking-label);color:var(--t2o-fg-muted);margin:26px 0 10px;font-weight:var(--t2o-fw-semibold)}
+  .sub-h .tsum{text-transform:none;letter-spacing:0;font-weight:var(--t2o-fw-regular);font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs);margin-left:8px}
+  .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--t2o-space-3)}
+  .cards.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .card{background:var(--t2o-surface);border:1px solid var(--t2o-line);border-radius:var(--t2o-radius-container);padding:10px 12px;min-width:0}
+  .card .k{color:var(--t2o-fg-muted);font-size:var(--t2o-fs-2xs);text-transform:uppercase;letter-spacing:var(--t2o-tracking-label);font-weight:var(--t2o-fw-semibold);margin-bottom:6px}
+  .card .v{font-family:var(--t2o-mono);font-size:var(--t2o-fs-lg);font-weight:var(--t2o-fw-medium);color:var(--t2o-fg);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .card .sub{color:var(--t2o-fg-muted);font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs);margin-top:4px;overflow-wrap:anywhere}
+  .card .sub[hidden]{display:none}
+  /* State words always carry a glyph; colour is never the only signal. */
+  .badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--t2o-sans);font-size:var(--t2o-fs-xs);font-weight:var(--t2o-fw-semibold);letter-spacing:.06em;text-transform:uppercase;line-height:1.4;color:var(--t2o-fg-muted)}
+  .badge.ok{color:var(--t2o-ok)} .badge.err{color:var(--t2o-fail)} .badge.warn{color:var(--t2o-warn)}
+  .badge.info{color:var(--t2o-fg-soft)} .badge.muted,.badge.pending{color:var(--t2o-fg-muted)}
+  .badge[data-state="healthy_empty"]{color:var(--t2o-fg-muted)}
+  .badge.chip{border:1px solid currentColor;border-radius:var(--t2o-radius-control);padding:2px 8px}
+  .badge.chip.pending{border-style:dashed}
+  .chip{display:inline-block;border:1px solid var(--t2o-line-strong);border-radius:var(--t2o-radius-control);padding:1px 7px;font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs);color:var(--t2o-fg-soft)}
+  .overdue{color:var(--t2o-warn);font-weight:var(--t2o-fw-semibold)}
+  table{width:100%;border-collapse:collapse;background:var(--t2o-surface);border:1px solid var(--t2o-line);border-radius:var(--t2o-radius-container);margin-top:8px}
+  th{position:sticky;top:var(--g2o-nav-h);z-index:1;background:var(--t2o-raised);border-bottom:1px solid var(--t2o-line-strong);padding:7px 12px;text-align:left;font-family:var(--t2o-sans);font-size:var(--t2o-fs-2xs);font-weight:var(--t2o-fw-semibold);letter-spacing:var(--t2o-tracking-label);text-transform:uppercase;color:var(--t2o-fg-muted);white-space:nowrap}
+  td{padding:8px 12px;min-height:var(--t2o-row);height:var(--t2o-row);vertical-align:top;border-bottom:1px solid var(--t2o-line);font-family:var(--t2o-mono);font-size:var(--t2o-fs-sm);font-variant-numeric:tabular-nums;color:var(--t2o-fg)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--t2o-raised)}
+  th.num,td.num{text-align:right;white-space:nowrap}
+  td .sub{display:block;font-size:var(--t2o-fs-xs);color:var(--t2o-fg-muted);margin-top:1px;overflow-wrap:anywhere}
+  td.sans{font-family:var(--t2o-sans)}
+  table.rl{max-width:700px}
+  .mono{font-family:var(--t2o-mono);font-size:var(--t2o-fs-sm);overflow-wrap:anywhere} .muted{color:var(--t2o-fg-muted)}
+  p.muted{font-size:var(--t2o-fs-md);color:var(--t2o-fg-soft);max-width:760px}
+  .cursor{display:block;font-size:10.5px;margin-top:3px;color:var(--t2o-fg-muted)} .cursor code{background:transparent;padding:0;font-size:inherit;color:inherit}
+  td.err{max-width:300px;overflow-wrap:anywhere;font-size:var(--t2o-fs-xs);color:var(--t2o-fail)}
+  td.err .muted{color:var(--t2o-fg-muted)}
+  /* Headroom colour ramp: the sparkline takes its row's state colour. */
+  .hr-ok{color:var(--t2o-ok)} .hr-warn{color:var(--t2o-warn)} .hr-err{color:var(--t2o-fail)}
+  svg.spark{width:var(--t2o-spark-w);height:var(--t2o-spark-h);vertical-align:middle;display:inline-block;fill:none;stroke:var(--t2o-series-1);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+  svg.spark polyline{vector-effect:non-scaling-stroke}
+  .hr-ok svg.spark,.hr-warn svg.spark,.hr-err svg.spark{stroke:currentColor}
+  .outcome{display:inline-flex;gap:2px;align-items:center;margin-left:8px;vertical-align:middle}
+  .outcome i{width:4px;height:13px;border-radius:var(--t2o-radius-container);background:var(--t2o-ok);display:inline-block} .outcome i.f{background:var(--t2o-fail)}
+  td.recent{white-space:nowrap}
+  .ocount{margin-left:6px;font-size:var(--t2o-fs-xs);color:var(--t2o-fg-muted)}
+  /* Small-chart standard (family spec section 12.1): value labels sit in the 44px gutter, outside the plot. */
+  .legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;min-height:16px;font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs);color:var(--t2o-fg-soft)}
+  .legend .lg{display:inline-flex;align-items:center;gap:6px}
+  .legend svg{width:14px;height:6px;overflow:visible}
+  .chart-wrap{position:relative;height:var(--t2o-chart-h);margin-top:4px}
   svg.chart{width:100%;height:100%;display:block;overflow:visible}
-  .chart-tip{position:absolute;pointer-events:none;display:none;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:11px;white-space:nowrap;transform:translate(-50%,-115%);z-index:2}
-  .card .sub{color:var(--muted);font-size:11px;margin-top:5px}
-  .outcome{display:inline-flex;gap:2px;align-items:center}
-  .outcome i{width:4px;height:13px;border-radius:1px;background:var(--ok);display:inline-block} .outcome i.f{background:var(--err)}
-  .rollup{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:18px}
-  .rollup .rc{display:flex;flex-direction:column}
-  .rollup .rc .rv{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
-  .rollup .rc .rk{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
-  .filter{width:100%;max-width:340px;margin:10px 0;padding:7px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--fg);font-size:13px}
-  .reasons{padding:6px 24px;color:var(--warn);font-size:12px;font-family:var(--mono);border-bottom:1px solid var(--line)}
-  #staleBanner{display:none;padding:8px 24px;background:rgba(210,153,34,.16);color:var(--warn);font-size:13px;border-bottom:1px solid var(--line)}
-  #staleBanner.show{display:block}
+  svg.chart .grid{stroke:var(--t2o-chart-grid);stroke-width:1}
+  svg.chart .ax{fill:var(--t2o-chart-axis);font-family:var(--t2o-mono);font-size:9px}
+  svg.chart .note{fill:var(--t2o-fg-muted);font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs)}
+  svg.chart .noteic{color:var(--t2o-fg-muted)}
+  svg.chart .cross{stroke:var(--t2o-fg-muted);stroke-width:1;stroke-dasharray:2 2}
+  svg.chart .dot{fill:var(--t2o-series-1)}
+  svg.chart .area{fill:var(--t2o-series-1);opacity:var(--t2o-chart-area)}
+  svg.chart .ln,.legend .ln{fill:none;stroke-linejoin:round}
+  .s1{stroke:var(--t2o-series-1);stroke-width:1.5}
+  .s2{stroke:var(--t2o-series-2);stroke-width:1.5;stroke-dasharray:4 3}
+  .s3{stroke:var(--t2o-series-3);stroke-width:1.6;stroke-dasharray:1 3}
+  .chart-tip{position:absolute;pointer-events:none;display:none;background:var(--t2o-raised);border:1px solid var(--t2o-line-strong);border-radius:var(--t2o-radius-overlay);padding:4px 8px;font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs);color:var(--t2o-fg);white-space:nowrap;transform:translate(-50%,-115%);z-index:2}
+  /* Posture strip */
+  .rollup{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--t2o-surface);border:1px solid var(--t2o-line);border-radius:var(--t2o-radius-container);margin-bottom:18px}
+  .rollup .rc{display:flex;flex-direction:column-reverse;gap:2px;padding:10px 14px;border-left:1px solid var(--t2o-line);min-width:0}
+  .rollup .rc:first-child{border-left:0}
+  .rollup .rc .rv{font-family:var(--t2o-mono);font-size:var(--t2o-fs-xl);font-weight:var(--t2o-fw-medium);font-variant-numeric:tabular-nums;color:var(--t2o-fg);overflow-wrap:anywhere}
+  .rollup .rc .rv.ok{color:var(--t2o-ok)} .rollup .rc .rv.err{color:var(--t2o-fail)} .rollup .rc .rv.warn{color:var(--t2o-warn)} .rollup .rc .rv.pending{color:var(--t2o-fg-muted)}
+  .rollup .rc .rk{color:var(--t2o-fg-muted);font-size:var(--t2o-fs-2xs);text-transform:uppercase;letter-spacing:var(--t2o-tracking-label);font-weight:var(--t2o-fw-semibold)}
+  /* Filter control with match count */
+  .filterbar{display:flex;align-items:center;gap:10px;margin:10px 0}
+  .filterwrap{position:relative;width:100%;max-width:340px}
+  .filterwrap svg{position:absolute;left:9px;top:50%;width:13px;height:13px;transform:translateY(-50%);color:var(--t2o-fg-muted);pointer-events:none}
+  .filter{width:100%;padding:6px 11px 6px 30px;background:var(--t2o-raised);border:1px solid var(--t2o-line-strong);border-radius:var(--t2o-radius-control);color:var(--t2o-fg);font:var(--t2o-fs-sm) var(--t2o-sans)}
+  .filter::placeholder{color:var(--t2o-fg-faint)}
+  #filterCount{font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs);color:var(--t2o-fg-muted)}
+  .legendtab{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:var(--t2o-fs-xs);color:var(--t2o-fg-muted)}
+  .legendtab span{display:inline-flex;align-items:center;gap:6px}
+  .legendtab .gl{width:11px;height:11px}
+  /* Header banners */
+  .reasons{display:flex;align-items:flex-start;gap:8px;padding:6px 20px;background:var(--t2o-accent-soft);color:var(--t2o-fg-soft);font-size:var(--t2o-fs-xs);font-family:var(--t2o-mono);border-bottom:1px solid var(--t2o-line)}
+  .reasons svg{width:13px;height:13px;flex:none;margin-top:1px;color:var(--t2o-fail)}
+  .reasons .badge{margin-right:4px}
+  .reasons[hidden]{display:none}
+  #staleBanner{display:none;align-items:center;gap:8px;padding:8px 20px;background:var(--t2o-surface);color:var(--t2o-fg-soft);font-size:var(--t2o-fs-sm);border-bottom:1px solid var(--t2o-line)}
+  #staleBanner svg{width:13px;height:13px;color:var(--t2o-warn);flex:none}
+  #staleBanner.show{display:flex}
+  #staleBanner button{margin-left:auto}
   .controls{display:inline-flex;gap:10px;align-items:center}
-  button.ctl{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit}
-  button.ctl:hover{border-color:var(--accent)}
-  footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
-  nav.tabs{position:sticky;top:0;z-index:5;display:flex;gap:4px;flex-wrap:wrap;padding:8px 24px 0;background:var(--bg);border-bottom:1px solid var(--line)}
-  .tab-btn{background:transparent;color:var(--muted);border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
-  .tab-btn:hover{color:var(--fg)} .tab-btn.active{color:var(--fg);background:var(--panel);border-color:var(--line)}
+  button.ctl{display:inline-flex;align-items:center;gap:6px;background:var(--t2o-raised);color:var(--t2o-fg);border:1px solid var(--t2o-line-strong);border-radius:var(--t2o-radius-control);padding:3px 10px;min-height:26px;font:var(--t2o-fw-medium) var(--t2o-fs-xs) var(--t2o-mono);cursor:pointer}
+  button.ctl:hover{background:var(--t2o-hover)}
+  button.ctl svg{width:14px;height:14px}
+  button.ctl:focus-visible,.tab-btn:focus-visible,.filter:focus-visible,a:focus-visible{outline:2px solid var(--t2o-accent);outline-offset:1px}
+  footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--t2o-fg-muted);font-family:var(--t2o-mono);font-size:var(--t2o-fs-xs)}
+  /* Underline tabs */
+  nav.tabs{position:sticky;top:0;z-index:5;display:flex;align-items:stretch;gap:0;padding:0 20px;height:var(--g2o-nav-h);overflow-x:auto;background:var(--t2o-bg);border-bottom:1px solid var(--t2o-line)}
+  .tab-btn{display:inline-flex;align-items:center;gap:6px;background:transparent;color:var(--t2o-fg-muted);border:0;border-bottom:2px solid transparent;padding:9px 12px;font:var(--t2o-fw-medium) var(--t2o-fs-sm) var(--t2o-sans);cursor:pointer;white-space:nowrap}
+  .tab-btn:hover{color:var(--t2o-fg)} .tab-btn.active{color:var(--t2o-fg);font-weight:var(--t2o-fw-semibold);border-bottom-color:var(--t2o-accent)}
+  .tabcount{display:inline-flex;align-items:center;gap:4px;font-family:var(--t2o-mono);font-size:var(--t2o-fs-2xs);color:var(--t2o-fail)}
+  .tabcount svg{width:8px;height:8px}
+  .tabcount[hidden]{display:none}
   section[data-tab]{display:none} section[data-tab].active{display:block}
+  /* Config: read-only key / value rows, mono dominant */
+  .kv{background:var(--t2o-surface);border:1px solid var(--t2o-line);border-radius:var(--t2o-radius-container);max-width:900px}
+  .kvr{display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;padding:8px 12px;border-bottom:1px solid var(--t2o-line);font-family:var(--t2o-mono);font-size:var(--t2o-fs-sm)}
+  .kvr:last-child{border-bottom:0}
+  .kvr .kk{color:var(--t2o-fg-muted)} .kvr .kvv{color:var(--t2o-fg);overflow-wrap:anywhere}
+  @media (max-width:820px){
+    .cards,.cards.c2{grid-template-columns:minmax(0,1fr)}
+    .rollup{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .rollup .rc:nth-child(odd){border-left:0}
+    .kvr{grid-template-columns:minmax(0,1fr)}
+  }
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 <script>(function(){try{var t=localStorage.getItem('graph2otel-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <script>window.__refreshMs = {{if .RefreshMs}}{{.RefreshMs}}{{else}}5000{{end}};</script>
 <noscript><style>section[data-tab]{display:block!important;margin-bottom:34px} nav.tabs{display:none}</style></noscript>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-warning" viewBox="0 0 256 256" fill="currentColor"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></symbol>
+<symbol id="i-warning-circle" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></symbol>
+<symbol id="i-info" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z"/></symbol>
+<symbol id="i-prohibit" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm88,104a87.56,87.56,0,0,1-20.41,56.28L71.72,60.4A88,88,0,0,1,216,128ZM40,128A87.56,87.56,0,0,1,60.41,71.72L184.28,195.6A88,88,0,0,1,40,128Z"/></symbol>
+<symbol id="i-arrows-split" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,189.66l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L184,196.69V139.31l-56-56-56,56v57.38l18.34-18.35a8,8,0,0,1,11.32,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L56,196.69V136a8,8,0,0,1,2.34-5.66L120,68.69V24a8,8,0,0,1,16,0V68.69l61.66,61.65A8,8,0,0,1,200,136v60.69l18.34-18.35a8,8,0,0,1,11.32,11.32Z"/></symbol>
+<symbol id="i-magnifying-glass" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></symbol>
+<symbol id="i-circle-half" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,16.37a86.4,86.4,0,0,1,16,3V212.67a86.4,86.4,0,0,1-16,3Zm32,9.26a87.81,87.81,0,0,1,16,10.54V195.83a87.81,87.81,0,0,1-16,10.54ZM40,128a88.11,88.11,0,0,1,80-87.63V215.63A88.11,88.11,0,0,1,40,128Zm160,50.54V77.46a87.82,87.82,0,0,1,0,101.08Z"/></symbol>
+<symbol id="s-circle" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="7" fill="currentColor"/></symbol>
+<symbol id="s-diamond" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0.5 15.5 8 8 15.5 0.5 8Z" fill="currentColor"/></symbol>
+<symbol id="s-ring" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+</defs></svg>
 <header>
   <h1>graph2otel</h1>
   <span class="ver">{{.Service.Version}} &middot; {{.Service.GoVersion}}</span>
   <span class="ver">up {{.Service.Uptime}} &middot; started {{.Service.StartedAt}}</span>
   <span class="spacer"></span>
-  <button class="ctl" id="themeToggle" title="Toggle light/dark theme" aria-label="Toggle theme">◐</button>
-  <span class="badge {{healthClass .Health}}" id="healthBadge" title="{{range .HealthReasons}}{{.}}&#10;{{end}}">{{.Health}}</span>
-  <span class="badge {{if .Readiness.Ready}}ok{{else}}err{{end}}" id="readinessBadge" title="{{.Readiness.Reason}}">{{.Readiness.State}}</span>
+  <button class="ctl" id="themeToggle" title="Toggle light/dark theme" aria-label="Toggle theme"><svg aria-hidden="true"><use href="#i-circle-half"/></svg></button>
+  <span class="badge chip {{healthClass .Health}}" id="healthBadge" title="{{range .HealthReasons}}{{.}}&#10;{{end}}">{{shapeFor (healthClass .Health)}}{{.Health}}</span>
+  <span class="badge chip {{if .Readiness.Ready}}ok{{else}}err{{end}}" id="readinessBadge" title="{{.Readiness.Reason}}">{{if .Readiness.Ready}}{{shapeFor "ok"}}{{else}}{{shapeFor "err"}}{{end}}{{.Readiness.State}}</span>
 </header>
-<div class="reasons" id="healthReasons"{{if not .HealthReasons}} style="display:none"{{end}}>{{range .HealthReasons}}{{.}} &middot; {{end}}</div>
-<div id="staleBanner"></div>
-<nav class="tabs" id="tabs">
-  <button class="tab-btn" data-target="overview">Overview</button>
-  <button class="tab-btn" data-target="collectors">Collectors</button>
-  <button class="tab-btn" data-target="config">Config</button>
-  <button class="tab-btn" data-target="cardinality">Cardinality</button>
+<div class="reasons" id="healthReasons"{{if not .HealthReasons}} hidden{{end}}><svg aria-hidden="true"><use href="#i-warning-circle"/></svg><span id="healthReasonsText">{{range $i, $r := .HealthReasons}}{{if $i}} &middot; {{end}}{{$r}}{{end}}</span></div>
+<div id="staleBanner"><svg aria-hidden="true"><use href="#i-warning"/></svg><span id="staleMsg"></span><button class="ctl" id="retryNow" type="button">Retry now</button></div>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Console sections">
+  <button class="tab-btn" id="tab-overview" role="tab" data-target="overview" aria-controls="panel-overview">Overview</button>
+  <button class="tab-btn" id="tab-collectors" role="tab" data-target="collectors" aria-controls="panel-collectors">Collectors<span class="tabcount" id="tabFailing"{{if not .Fleet.Failing}} hidden{{end}} title="failing collectors">{{shapeFor "err"}}<span id="tabFailingN">{{.Fleet.Failing}}</span></span></button>
+  <button class="tab-btn" id="tab-config" role="tab" data-target="config" aria-controls="panel-config">Config</button>
+  <button class="tab-btn" id="tab-cardinality" role="tab" data-target="cardinality" aria-controls="panel-cardinality">Cardinality{{if .Cardinality.Offenders}}<span class="tabcount" id="tabOffenders" title="high-cardinality offenders">{{shapeFor "err"}}{{len .Cardinality.Offenders}}</span>{{end}}</button>
 </nav>
 <main>
 
   <!-- ═══ OVERVIEW ═══ -->
-  <section data-tab="overview">
+  <section data-tab="overview" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
     <div class="rollup" id="rollup">
-      <div class="rc"><span class="rv" id="ruHealth">{{.Health}}</span><span class="rk">health</span></div>
-      <div class="rc"><span class="rv" id="ruReadiness">{{.Readiness.State}}</span><span class="rk">readiness</span></div>
+      <div class="rc"><span class="rv {{healthClass .Health}}" id="ruHealth">{{.Health}}</span><span class="rk">health</span></div>
+      <div class="rc"><span class="rv {{if .Readiness.Ready}}ok{{else}}err{{end}}" id="ruReadiness">{{.Readiness.State}}</span><span class="rk">readiness</span></div>
       <div class="rc"><span class="rv" id="ruTenants">{{len .Tenants}}</span><span class="rk">tenants</span></div>
       <div class="rc"><span class="rv" id="ruEnabled">—</span><span class="rk">collectors</span></div>
       <div class="rc"><span class="rv" id="ruFailing">—</span><span class="rk">failing</span></div>
@@ -134,7 +337,7 @@
         <thead><tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th><th>trend</th></tr></thead>
         <tbody>
         {{range .RateLimits}}
-          <tr><td><code>{{.Workload}}</code></td><td class="num">{{printf "%.3g" .LimitPerSec}}</td><td class="num">{{.Burst}}</td><td class="num">{{printf "%.1f" .Tokens}}</td><td class="num">{{printf "%.0f" .HeadroomPct}}%</td><td>{{sparklineF .HeadroomSeries}}</td></tr>
+          <tr><td><code>{{.Workload}}</code></td><td class="num">{{printf "%.3g" .LimitPerSec}}</td><td class="num">{{.Burst}}</td><td class="num">{{printf "%.1f" .Tokens}}</td><td class="num hr-{{headroomClass .HeadroomPct}}">{{printf "%.0f" .HeadroomPct}}%</td><td class="hr-{{headroomClass .HeadroomPct}}">{{sparklineF .HeadroomSeries}}</td></tr>
         {{end}}
         </tbody>
       </table>
@@ -143,8 +346,8 @@
 
     <div class="sub-h">Service</div>
     <div class="cards">
-      <div class="card"><div class="k">Version</div><div class="v" style="font-size:16px">{{.Service.Version}}</div><div class="k" style="margin-top:6px">{{.Service.GoVersion}}</div></div>
-      <div class="card"><div class="k">Uptime</div><div class="v" id="uptime">{{.Service.Uptime}}</div><div class="k" style="margin-top:6px">since {{.Service.StartedAt}}</div></div>
+      <div class="card"><div class="k">Version</div><div class="v">{{.Service.Version}}</div><div class="sub">{{.Service.GoVersion}}</div></div>
+      <div class="card"><div class="k">Uptime</div><div class="v" id="uptime">{{.Service.Uptime}}</div><div class="sub">since {{.Service.StartedAt}}</div></div>
       <div class="card"><div class="k">Tenants</div><div class="v">{{len .Tenants}}</div></div>
     </div>
 
@@ -154,50 +357,50 @@
     <div class="sub-h">Runtime trend (~10 min)</div>
     <div class="cards">
       <div class="card"><div class="k">Goroutines</div><div class="v" id="goroutines">{{.Runtime.Goroutines}}</div><div class="sub">GOMAXPROCS <span id="gomaxprocs">{{.Runtime.GOMAXPROCS}}</span></div>
-        <div class="chart-wrap"><svg class="chart" id="chGoroutines"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgGoroutines"></div><div class="chart-wrap"><svg class="chart" id="chGoroutines"></svg><div class="chart-tip"></div></div></div>
       <div class="card"><div class="k">Heap in use</div><div class="v" id="heapAlloc">{{.Runtime.HeapAlloc}}</div><div class="sub">GC cycles <span id="numGC">{{.Runtime.NumGC}}</span></div>
-        <div class="chart-wrap"><svg class="chart" id="chHeap"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgHeap"></div><div class="chart-wrap"><svg class="chart" id="chHeap"></svg><div class="chart-tip"></div></div></div>
       <div class="card"><div class="k">GC rate</div><div class="v" id="gcRate">&mdash;</div><div class="sub">cycles/sec</div>
-        <div class="chart-wrap"><svg class="chart" id="chGC"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgGC"></div><div class="chart-wrap"><svg class="chart" id="chGC"></svg><div class="chart-tip"></div></div></div>
     </div>
 
     <div class="sub-h">Throughput &amp; fleet trend (~10 min)</div>
-    <div class="cards">
+    <div class="cards c2">
       <div class="card"><div class="k">Emitted to SDK</div><div class="v" id="metricRate">{{printf "%.1f" .Throughput.MetricPointsPerSec}}</div><div class="sub">metric points/sec &middot; <span id="logRate">{{printf "%.1f" .Throughput.LogRecordsPerSec}}</span> log records/sec</div>
-        <div class="chart-wrap"><svg class="chart" id="chEmit"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgEmit"></div><div class="chart-wrap"><svg class="chart" id="chEmit"></svg><div class="chart-tip"></div></div></div>
       <div class="card"><div class="k">Active series</div><div class="v" id="activeSeries">{{.SeriesTrend.TotalSeries}}</div><div class="sub">distinct series last export</div>
-        <div class="chart-wrap"><svg class="chart" id="chCard"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgCard"></div><div class="chart-wrap"><svg class="chart" id="chCard"></svg><div class="chart-tip"></div></div></div>
       <div class="card"><div class="k">Collectors failing</div><div class="v" id="fleetFailing">{{.Fleet.Failing}}</div><div class="sub"><span id="fleetEnabled">{{.Fleet.Enabled}}</span> active &middot; <span id="fleetPending">{{.Fleet.Pending}}</span> starting</div>
-        <div class="chart-wrap"><svg class="chart" id="chFailing"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgFailing"></div><div class="chart-wrap"><svg class="chart" id="chFailing"></svg><div class="chart-tip"></div></div></div>
       <div class="card"><div class="k">Mean run duration</div><div class="v" id="meanDuration">{{printf "%.0f" .Fleet.MeanDurationMs}}ms</div><div class="sub">across every collector</div>
-        <div class="chart-wrap"><svg class="chart" id="chDuration"></svg><div class="chart-tip"></div></div></div>
+        <div class="legend" id="lgDuration"></div><div class="chart-wrap"><svg class="chart" id="chDuration"></svg><div class="chart-tip"></div></div></div>
     </div>
 
     {{with .Delivery}}
     <div class="sub-h">Exporter accepted</div>
-    <div class="cards" id="deliveryStatus">
+    <div class="cards c2" id="deliveryStatus">
       <div class="card">
         <div class="k">Metrics</div>
-        <div class="v"><span class="badge {{if eq .Metrics.State "healthy"}}ok{{else if eq .Metrics.State "degraded"}}err{{else}}pending{{end}}" id="metricDeliveryState">{{.Metrics.State}}</span></div>
+        <div class="v"><span class="badge {{healthClass (printf "%s" .Metrics.State)}}" id="metricDeliveryState">{{shapeFor (healthClass (printf "%s" .Metrics.State))}}{{.Metrics.State}}</span></div>
         <div class="sub"><span id="metricDeliveryAttempts">{{.Metrics.ExportAttempts}}</span> attempts &middot; <span id="metricDeliverySuccesses">{{.Metrics.ExportSuccesses}}</span> accepted &middot; <span id="metricDeliveryFailures">{{.Metrics.ExportFailures}}</span> failed</div>
-        <div class="sub">flush failures <span id="metricDeliveryFlushFailures">{{.Metrics.ForceFlushFailures}}</span> &middot; shutdown failures <span id="metricDeliveryShutdownFailures">{{.Metrics.ShutdownFailures}}</span></div>
-        <div class="sub mono" id="metricDeliveryLastSuccess">last success {{if .Metrics.LastSuccessAt}}{{.Metrics.LastSuccessAt}}{{else}}&mdash;{{end}}</div>
-        <div class="sub mono" id="metricDeliveryLastFailure">last failure {{if .Metrics.LastFailureAt}}{{.Metrics.LastFailureAt}}{{if .Metrics.LastFailureCode}} &middot; {{.Metrics.LastFailureCode}}{{end}}{{else}}&mdash;{{end}}</div>
+        <div class="sub" id="metricDeliveryFlushLine"{{if and (eq .Metrics.ForceFlushFailures 0) (eq .Metrics.ShutdownFailures 0)}} hidden{{end}}>flush failures <span id="metricDeliveryFlushFailures">{{.Metrics.ForceFlushFailures}}</span> &middot; shutdown failures <span id="metricDeliveryShutdownFailures">{{.Metrics.ShutdownFailures}}</span></div>
+        <div class="sub" id="metricDeliveryLastSuccess">last success {{if .Metrics.LastSuccessAt}}{{.Metrics.LastSuccessAt}}{{else}}&mdash;{{end}}</div>
+        <div class="sub" id="metricDeliveryLastFailure">last failure {{if .Metrics.LastFailureAt}}{{.Metrics.LastFailureAt}}{{if .Metrics.LastFailureCode}} &middot; {{.Metrics.LastFailureCode}}{{end}}{{else}}&mdash;{{end}}</div>
       </div>
       <div class="card">
         <div class="k">Logs</div>
-        <div class="v"><span class="badge {{if eq .Logs.State "healthy"}}ok{{else if eq .Logs.State "degraded"}}err{{else}}pending{{end}}" id="logDeliveryState">{{.Logs.State}}</span></div>
+        <div class="v"><span class="badge {{healthClass (printf "%s" .Logs.State)}}" id="logDeliveryState">{{shapeFor (healthClass (printf "%s" .Logs.State))}}{{.Logs.State}}</span></div>
         <div class="sub"><span id="logDeliveryAttempts">{{.Logs.ExportAttempts}}</span> attempts &middot; <span id="logDeliverySuccesses">{{.Logs.ExportSuccesses}}</span> accepted &middot; <span id="logDeliveryFailures">{{.Logs.ExportFailures}}</span> failed</div>
-        <div class="sub">flush failures <span id="logDeliveryFlushFailures">{{.Logs.ForceFlushFailures}}</span> &middot; shutdown failures <span id="logDeliveryShutdownFailures">{{.Logs.ShutdownFailures}}</span></div>
-        <div class="sub mono" id="logDeliveryLastSuccess">last success {{if .Logs.LastSuccessAt}}{{.Logs.LastSuccessAt}}{{else}}&mdash;{{end}}</div>
-        <div class="sub mono" id="logDeliveryLastFailure">last failure {{if .Logs.LastFailureAt}}{{.Logs.LastFailureAt}}{{if .Logs.LastFailureCode}} &middot; {{.Logs.LastFailureCode}}{{end}}{{else}}&mdash;{{end}}</div>
+        <div class="sub" id="logDeliveryFlushLine"{{if and (eq .Logs.ForceFlushFailures 0) (eq .Logs.ShutdownFailures 0)}} hidden{{end}}>flush failures <span id="logDeliveryFlushFailures">{{.Logs.ForceFlushFailures}}</span> &middot; shutdown failures <span id="logDeliveryShutdownFailures">{{.Logs.ShutdownFailures}}</span></div>
+        <div class="sub" id="logDeliveryLastSuccess">last success {{if .Logs.LastSuccessAt}}{{.Logs.LastSuccessAt}}{{else}}&mdash;{{end}}</div>
+        <div class="sub" id="logDeliveryLastFailure">last failure {{if .Logs.LastFailureAt}}{{.Logs.LastFailureAt}}{{if .Logs.LastFailureCode}} &middot; {{.Logs.LastFailureCode}}{{end}}{{else}}&mdash;{{end}}</div>
       </div>
     </div>
     {{end}}
 
     {{with .Capacity}}
     <div class="sub-h">Capacity <span class="tsum">Exact cumulative counters</span></div>
-    <div class="cards" id="capacityStatus">
+    <div class="cards c2" id="capacityStatus">
       <div class="card"><div class="k">Metrics transmitted payload</div><div class="v" id="capacityMetricBytes">{{.Transport.Metrics.TransmittedPayloadBytes}}</div><div class="sub">post-compression bytes &middot; <span id="capacityMetricRetries">{{.Transport.Metrics.RetryAttempts}}</span> exporter retries</div></div>
       <div class="card"><div class="k">Logs transmitted payload</div><div class="v" id="capacityLogBytes">{{.Transport.Logs.TransmittedPayloadBytes}}</div><div class="sub">post-compression bytes &middot; <span id="capacityLogRetries">{{.Transport.Logs.RetryAttempts}}</span> exporter retries</div></div>
     </div>
@@ -218,13 +421,13 @@
     <div class="cards" id="costStatus">
       <div class="card"><div class="k">Recurring projected {{.Period}}</div><div class="v" id="costProjected">{{.ProjectedPeriodMicrounits}}</div><div class="sub">{{.Currency}} microunits &middot; <span id="costInterval">{{.IntervalMicrounits}}</span> observed interval cost across all traffic</div></div>
       <div class="card"><div class="k">Budget ratio</div><div class="v" id="costBudget">{{if .BudgetRatio}}{{printf "%.0f" .BudgetPercent}}%{{else}}&mdash;{{end}}</div><div class="sub" id="costBudgetDetail">recurring steady_state only &middot; {{if .BudgetRatio}}{{.ProjectedPeriodMicrounits}} / {{.BudgetMicrounits}} microunits{{else if .BudgetMicrounits}}collecting the first estimate{{else}}no budget comparison configured{{end}}</div></div>
-      <div class="card"><div class="k">Price metadata</div><div class="v mono" style="font-size:14px">{{.Version}}</div><div class="sub">{{.Source}} &middot; effective {{.EffectiveAt}}</div></div>
+      <div class="card"><div class="k">Price metadata</div><div class="v">{{.Version}}</div><div class="sub">{{.Source}} &middot; effective {{.EffectiveAt}}</div></div>
     </div>
     <table id="capacityCost">
       <thead><tr><th>Tenant</th><th>Collector</th><th>Transport</th><th>Traffic class</th><th>Attribution</th><th class="num">Allocated payload bytes</th><th class="num">Observed interval cost</th><th class="num">Recurring projected {{.Period}}</th></tr></thead>
       <tbody id="capacityCostBody">
       {{range .Rows}}
-        <tr><td><code>{{.TenantID}}</code></td><td><code>{{.Collector}}</code></td><td>{{.IngestTransport}}</td><td>{{.TrafficClass}}</td><td><span class="badge warn">{{.Attribution}}</span></td><td class="num">{{.AllocatedPayloadBytes}}</td><td class="num">{{.IntervalMicrounits}}</td><td class="num">{{.ProjectedPeriodMicrounits}}</td></tr>
+        <tr><td><code>{{.TenantID}}</code></td><td><code>{{.Collector}}</code></td><td>{{.IngestTransport}}</td><td>{{.TrafficClass}}</td><td><span class="chip">{{.Attribution}}</span></td><td class="num">{{.AllocatedPayloadBytes}}</td><td class="num">{{.IntervalMicrounits}}</td><td class="num">{{.ProjectedPeriodMicrounits}}</td></tr>
       {{else}}
         <tr><td colspan="8" class="muted">Collecting two complete metric intervals for the first estimate.</td></tr>
       {{end}}
@@ -235,14 +438,17 @@
   </section>
 
   <!-- ═══ COLLECTORS ═══ -->
-  <section data-tab="collectors" class="wide">
-    <input class="filter" type="text" placeholder="Filter collectors…" oninput="filterAll(this)">
+  <section data-tab="collectors" id="panel-collectors" role="tabpanel" aria-labelledby="tab-collectors" class="wide">
+    <div class="filterbar">
+      <div class="filterwrap"><svg aria-hidden="true"><use href="#i-magnifying-glass"/></svg><input class="filter" id="collectorFilter" type="text" placeholder="Filter collectors…" aria-label="Filter collectors" oninput="filterAll(this)"></div>
+      <span id="filterCount"></span>
+    </div>
     <div id="tenants">
     {{range .Tenants}}
       <div class="sub-h">Tenant <code>{{.TenantID}}</code>
         <span class="tsum">{{.EnabledCount}} active{{if .FailingCount}} &middot; {{.FailingCount}} failing{{end}}{{if .PendingCount}} &middot; {{.PendingCount}} starting{{end}}{{if .CoveredCount}} &middot; {{.CoveredCount}} covered{{end}}{{if .SkippedCount}} &middot; {{.SkippedCount}} skipped{{end}}</span>
       </div>
-      {{with .StartupFailure}}<div class="reasons"><span class="badge err">startup failed</span> <code>{{.Code}}</code> &middot; {{.Reason}}</div>{{end}}
+      {{with .StartupFailure}}<div class="reasons"><span class="badge err">{{shapeFor "err"}}startup failed</span> <code>{{.Code}}</code> &middot; {{.Reason}}</div>{{end}}
       <table class="ctable">
         <thead><tr>
           <th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th>
@@ -252,23 +458,23 @@
         <tbody>
         {{range .Collectors}}
           {{if .Enabled}}
-          <tr{{if and .HasRun (not .LastSuccess)}} class="bad"{{end}}>
+          <tr{{if and .HasRun (not .LastSuccess)}} class="t2o-row--alert"{{end}}>
             <td><code>{{.Name}}</code>{{with .State}}<span class="cursor mono" title="durable checkpoint cursor">{{if eq .Kind "blob"}}cursor {{.ByteOffset}}B &middot; {{.BlobsTracked}} blobs{{if .NewestBlob}} &middot; newest <code>{{.NewestBlob}}</code>{{end}}{{else}}{{if .Watermark}}watermark {{.Watermark}} &middot; {{.Staleness}} behind{{else}}cold start{{end}}{{if .SeenIDs}} &middot; {{.SeenIDs}} seen{{end}}{{if .InFlightJob}} &middot; job <code>{{.InFlightJob}}</code>{{end}}{{end}}</span>{{end}}</td>
-            <td>{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}">{{.Availability.State}}</span> <span class="muted mono">{{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}</span>{{else}}{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{end}}{{if .Transport}} <span class="muted mono" title="{{if .Availability}}resolved collector transport{{else}}ingest transport{{end}}">via {{.Transport}}</span>{{end}}</td>
+            <td class="sans">{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}" data-state="{{.Availability.State}}">{{stateGlyph (printf "%s" .Availability.State)}}{{.Availability.State}}</span><span class="sub">{{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{if .Transport}} &middot; <span title="resolved collector transport">via {{.Transport}}</span>{{end}}</span>{{else}}{{if not .HasRun}}<span class="badge pending">{{shapeFor "pending"}}starting</span>{{else if .LastSuccess}}<span class="badge ok">{{shapeFor "ok"}}ok</span>{{else}}<span class="badge err">{{shapeFor "err"}}failing</span>{{end}}{{if .Transport}}<span class="sub"><span title="ingest transport">via {{.Transport}}</span></span>{{end}}{{end}}</td>
             <td class="num">{{.IntervalSec}}s</td>
             <td class="num">{{if .HasRun}}{{printf "%.0f" .SuccessRatePct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td>
             <td class="num">{{.Runs}}</td>
             <td class="num">{{.Failures}}{{if gt .ConsecutiveFailures 0}} <span class="muted">({{.ConsecutiveFailures}}&times;)</span>{{end}}</td>
-            <td class="num">{{if not .HasRun}}<span class="muted">&mdash;</span>{{else if .Overdue}}<span class="badge warn">overdue</span>{{else if le .NextRunInSec 0}}due{{else}}{{.NextRunIn}}{{end}}</td>
+            <td class="num">{{if not .HasRun}}<span class="muted">&mdash;</span>{{else if .Overdue}}<span class="overdue">overdue</span>{{else if le .NextRunInSec 0}}due{{else}}{{.NextRunIn}}{{end}}</td>
             <td class="num">{{if .HasRun}}{{.LastDurationMs}}ms{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-            <td>{{sparkline .DurationMsSeries}}{{outcomeStrip .OutcomeSeries}}</td>
+            <td class="recent">{{sparkline .DurationMsSeries}}{{outcomeStrip .OutcomeSeries}}</td>
             <td class="num">{{if .HasRun}}{{.Staleness}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-            <td class="mono">{{if .LastError}}{{.LastError}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+            <td class="err">{{if .LastError}}{{.LastError}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
           </tr>
           {{else if .CoveredBy}}
-          <tr><td><code>{{.Name}}</code></td><td>{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}">{{.Availability.State}}</span>{{if .Transport}} <span class="muted mono" title="resolved collector transport">via {{.Transport}}</span>{{end}}{{else}}<span class="badge info">covered</span>{{end}}</td><td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> <span title="covering collector transport">({{.CoveredBy.Transport}})</span>{{if .Availability}} &middot; {{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{else}} &middot; polled form off by design{{end}}</td></tr>
+          <tr><td><code>{{.Name}}</code></td><td class="sans">{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}" data-state="{{.Availability.State}}">{{stateGlyph (printf "%s" .Availability.State)}}{{.Availability.State}}</span>{{if .Transport}}<span class="sub"><span title="resolved collector transport">via {{.Transport}}</span></span>{{end}}{{else}}<span class="badge info">{{stateGlyph "covered"}}covered</span>{{end}}</td><td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> <span title="covering collector transport">({{.CoveredBy.Transport}})</span>{{if .Availability}} &middot; {{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{else}} &middot; polled form off by design{{end}}</td></tr>
           {{else}}
-          <tr class="skip"><td><code>{{.Name}}</code></td><td>{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}">{{.Availability.State}}</span>{{else}}<span class="badge {{skipBadgeClass .SkipCategory}}">{{if .SkipCategory}}{{.SkipCategory}}{{else}}skipped{{end}}</span>{{end}}</td><td class="mono muted" colspan="9">{{if .Availability}}{{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{else}}skipped &mdash; {{.SkipReason}}{{end}}{{if .Transport}} &middot; <span title="{{if .Availability}}resolved collector transport{{else}}ingest transport{{end}}">via {{.Transport}}</span>{{end}}</td></tr>
+          <tr><td><code>{{.Name}}</code></td><td class="sans">{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}" data-state="{{.Availability.State}}">{{stateGlyph (printf "%s" .Availability.State)}}{{.Availability.State}}</span>{{else}}<span class="badge {{skipBadgeClass .SkipCategory}}">{{skipGlyph .SkipCategory}}{{if .SkipCategory}}{{.SkipCategory}}{{else}}skipped{{end}}</span>{{end}}</td><td class="mono muted" colspan="9">{{if .Availability}}{{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{else}}skipped &mdash; {{.SkipReason}}{{end}}{{if .Transport}} &middot; <span title="{{if .Availability}}resolved collector transport{{else}}ingest transport{{end}}">via {{.Transport}}</span>{{end}}</td></tr>
           {{end}}
         {{else}}
           <tr><td colspan="11" class="muted">No collectors registered or skipped for this tenant.</td></tr>
@@ -279,41 +485,49 @@
       <p class="muted">No tenants configured.</p>
     {{end}}
     </div>
+    <div class="legendtab" id="stateLegend" aria-label="Collector state legend">
+      <span>{{stateGlyph "healthy"}}<b>healthy</b> running, data returned</span>
+      <span>{{stateGlyph "healthy_empty"}}<b>healthy_empty</b> running, tenant has none</span>
+      <span>{{stateGlyph "limited"}}<b>limited</b> partial by source design</span>
+      <span>{{stateGlyph "degraded"}}<b>degraded</b> emitting, quality reduced</span>
+      <span>{{stateGlyph "blocked"}}<b>blocked</b> permission or licence</span>
+      <span>{{stateGlyph "failed"}}<b>failed</b> the call returned an error</span>
+      <span>{{stateGlyph "startup_failed"}}<b>startup_failed</b> never started</span>
+      <span>{{stateGlyph "covered"}}<b>covered</b> another collector owns it, not a fault</span>
+      <span>{{stateGlyph "disabled"}}<b>disabled</b> switched off</span>
+      <span>{{stateGlyph "starting"}}<b>starting</b> no run yet</span>
+    </div>
   </section>
 
   <!-- ═══ CONFIG ═══ -->
-  <section data-tab="config">
+  <section data-tab="config" id="panel-config" role="tabpanel" aria-labelledby="tab-config">
     <div class="sub-h">Effective configuration<span class="tsum">secrets shown presence-only, never their value</span></div>
-    <div class="cards">
-      <div class="card"><div class="k">Log level</div><div class="v" style="font-size:16px">{{if .Config.LogLevel}}{{.Config.LogLevel}}{{else}}<span class="muted">&mdash;</span>{{end}}</div></div>
-      <div class="card"><div class="k">Tenants</div><div class="v">{{.Config.TenantCount}}</div></div>
-      <div class="card"><div class="k">Checkpoint dir</div><div class="v mono" style="font-size:13px">{{if .Config.CheckpointDir}}{{.Config.CheckpointDir}}{{else}}<span class="muted">&mdash;</span>{{end}}</div></div>
-      {{if .Config.RefreshInterval}}<div class="card"><div class="k">Admin refresh interval</div><div class="v" style="font-size:16px">{{.Config.RefreshInterval}}</div></div>{{end}}
-      {{if .Config.BackfillInitialLookback}}<div class="card"><div class="k">Backfill lookback</div><div class="v" style="font-size:16px">{{.Config.BackfillInitialLookback}}</div></div>{{end}}
-      <div class="card"><div class="k">Cardinality per_metric_limit</div><div class="v">{{if .Config.Cardinality.PerMetricLimit}}{{.Config.Cardinality.PerMetricLimit}}{{else}}unlimited{{end}}</div></div>
+    <div class="kv">
+      <div class="kvr"><span class="kk">Log level</span><span class="kvv">{{if .Config.LogLevel}}{{.Config.LogLevel}}{{else}}<span class="muted">&mdash;</span>{{end}}</span></div>
+      <div class="kvr"><span class="kk">Tenants</span><span class="kvv">{{.Config.TenantCount}}</span></div>
+      <div class="kvr"><span class="kk">Checkpoint dir</span><span class="kvv">{{if .Config.CheckpointDir}}{{.Config.CheckpointDir}}{{else}}<span class="muted">&mdash;</span>{{end}}</span></div>
+      {{if .Config.RefreshInterval}}<div class="kvr"><span class="kk">Admin refresh interval</span><span class="kvv">{{.Config.RefreshInterval}}</span></div>{{end}}
+      {{if .Config.BackfillInitialLookback}}<div class="kvr"><span class="kk">Backfill lookback</span><span class="kvv">{{.Config.BackfillInitialLookback}}</span></div>{{end}}
+      <div class="kvr"><span class="kk">Cardinality per_metric_limit</span><span class="kvv">{{if .Config.Cardinality.PerMetricLimit}}{{.Config.Cardinality.PerMetricLimit}}{{else}}unlimited{{end}}</span></div>
     </div>
 
     <div class="sub-h">OTLP</div>
-    <table class="rl">
-      <tbody>
-        <tr><td>Protocol</td><td class="mono">{{.Config.OTLP.Protocol}}</td></tr>
-        <tr><td>Endpoint</td><td class="mono">{{.Config.OTLP.Endpoint}}</td></tr>
-        {{if .Config.OTLP.GrafanaInstanceID}}<tr><td>Grafana Cloud instance</td><td class="mono">{{.Config.OTLP.GrafanaInstanceID}}</td></tr>{{end}}
-        <tr><td>Grafana Cloud token</td><td>{{if .Config.OTLP.GrafanaTokenSet}}<span class="badge ok">set</span>{{else}}<span class="badge muted">unset</span>{{end}}</td></tr>
-      </tbody>
-    </table>
+    <div class="kv">
+      <div class="kvr"><span class="kk">Protocol</span><span class="kvv">{{.Config.OTLP.Protocol}}</span></div>
+      <div class="kvr"><span class="kk">Endpoint</span><span class="kvv">{{.Config.OTLP.Endpoint}}</span></div>
+      {{if .Config.OTLP.GrafanaInstanceID}}<div class="kvr"><span class="kk">Grafana Cloud instance</span><span class="kvv">{{.Config.OTLP.GrafanaInstanceID}}</span></div>{{end}}
+      <div class="kvr"><span class="kk">Grafana Cloud token</span><span class="kvv">{{if .Config.OTLP.GrafanaTokenSet}}<span class="badge ok">{{shapeFor "ok"}}set</span>{{else}}<span class="badge muted">{{shapeFor "pending"}}unset</span>{{end}}</span></div>
+    </div>
 
     <div class="sub-h">Profiling</div>
-    <table class="rl">
-      <tbody>
-        <tr><td>Pyroscope</td><td>{{if .Config.Profiling.PyroscopeEnabled}}<span class="badge ok">on</span>{{else}}<span class="badge muted">off</span>{{end}}</td></tr>
-        {{if .Config.Profiling.PyroscopeServerAddress}}<tr><td>Server address</td><td class="mono">{{.Config.Profiling.PyroscopeServerAddress}}</td></tr>{{end}}
-        {{if .Config.Profiling.PyroscopeBasicAuthUser}}<tr><td>Basic-auth user</td><td class="mono">{{.Config.Profiling.PyroscopeBasicAuthUser}}</td></tr>{{end}}
-        <tr><td>Basic-auth password</td><td>{{if .Config.Profiling.PyroscopeBasicAuthPasswordSet}}<span class="badge ok">set</span>{{else}}<span class="badge muted">unset</span>{{end}}</td></tr>
-        <tr><td>Mutex profile fraction</td><td class="num mono">{{.Config.Profiling.MutexProfileFraction}}</td></tr>
-        <tr><td>Block profile rate</td><td class="num mono">{{.Config.Profiling.BlockProfileRate}}</td></tr>
-      </tbody>
-    </table>
+    <div class="kv">
+      <div class="kvr"><span class="kk">Pyroscope</span><span class="kvv">{{if .Config.Profiling.PyroscopeEnabled}}<span class="badge ok">{{shapeFor "ok"}}on</span>{{else}}<span class="badge muted">{{shapeFor "pending"}}off</span>{{end}}</span></div>
+      {{if .Config.Profiling.PyroscopeServerAddress}}<div class="kvr"><span class="kk">Server address</span><span class="kvv">{{.Config.Profiling.PyroscopeServerAddress}}</span></div>{{end}}
+      {{if .Config.Profiling.PyroscopeBasicAuthUser}}<div class="kvr"><span class="kk">Basic-auth user</span><span class="kvv">{{.Config.Profiling.PyroscopeBasicAuthUser}}</span></div>{{end}}
+      <div class="kvr"><span class="kk">Basic-auth password</span><span class="kvv">{{if .Config.Profiling.PyroscopeBasicAuthPasswordSet}}<span class="badge ok">{{shapeFor "ok"}}set</span>{{else}}<span class="badge muted">{{shapeFor "pending"}}unset</span>{{end}}</span></div>
+      <div class="kvr"><span class="kk">Mutex profile fraction</span><span class="kvv">{{.Config.Profiling.MutexProfileFraction}}</span></div>
+      <div class="kvr"><span class="kk">Block profile rate</span><span class="kvv">{{.Config.Profiling.BlockProfileRate}}</span></div>
+    </div>
 
     {{if .Config.Collectors}}
     <div class="sub-h">Collector overrides <span class="tsum">global</span></div>
@@ -321,7 +535,7 @@
       <thead><tr><th>Collector</th><th>Enabled</th><th>Interval</th><th>Source</th></tr></thead>
       <tbody>
       {{range .Config.Collectors}}
-        <tr><td><code>{{.Name}}</code></td><td>{{.EnabledLabel}}</td><td class="mono">{{if .Interval}}{{.Interval}}{{else}}<span class="muted">&mdash;</span>{{end}}</td><td class="mono">{{if .Source}}{{.Source}}{{else}}<span class="muted">&mdash;</span>{{end}}</td></tr>
+        <tr><td><code>{{.Name}}</code></td><td>{{.EnabledLabel}}</td><td>{{if .Interval}}{{.Interval}}{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Source}}{{.Source}}{{else}}<span class="muted">&mdash;</span>{{end}}</td></tr>
       {{end}}
       </tbody>
     </table>
@@ -335,10 +549,10 @@
       {{range .Config.Tenants}}
         <tr>
           <td><code>{{.TenantID}}</code></td>
-          <td class="mono">{{if .ClientID}}{{.ClientID}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+          <td>{{if .ClientID}}{{.ClientID}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
           <td>{{if .ExcludeSelf}}yes{{else}}<span class="muted">no</span>{{end}}</td>
-          <td>{{if .BlobIngest}}<span class="badge ok">on</span>{{else}}<span class="muted">off</span>{{end}}</td>
-          <td class="mono">{{range .Overrides}}<code>{{.Name}}</code>{{if .Interval}}={{.Interval}}{{end}} {{else}}<span class="muted">&mdash;</span>{{end}}</td>
+          <td class="sans">{{if .BlobIngest}}<span class="badge ok">{{shapeFor "ok"}}on</span>{{else}}<span class="badge muted">{{shapeFor "pending"}}off</span>{{end}}</td>
+          <td>{{range .Overrides}}<code>{{.Name}}</code>{{if .Interval}}={{.Interval}}{{end}} {{else}}<span class="muted">&mdash;</span>{{end}}</td>
         </tr>
       {{end}}
       </tbody>
@@ -347,22 +561,22 @@
   </section>
 
   <!-- ═══ CARDINALITY ═══ -->
-  <section data-tab="cardinality">
+  <section data-tab="cardinality" id="panel-cardinality" role="tabpanel" aria-labelledby="tab-cardinality">
     <div class="rollup">
       <div class="rc"><span class="rv">{{.Cardinality.TotalActiveSeries}}</span><span class="rk">active series</span></div>
       <div class="rc"><span class="rv">{{.Cardinality.MetricCount}}</span><span class="rk">metrics</span></div>
       <div class="rc"><span class="rv">{{if .Cardinality.PerMetricLimit}}{{.Cardinality.PerMetricLimit}}{{else}}&infin;{{end}}</span><span class="rk">per_metric_limit</span></div>
-      <div class="rc"><span class="rv">{{len .Cardinality.Offenders}}</span><span class="rk">offenders</span></div>
+      <div class="rc"><span class="rv{{if .Cardinality.Offenders}} err{{end}}">{{len .Cardinality.Offenders}}</span><span class="rk">offenders</span></div>
     </div>
     <p class="muted" style="margin:0 0 8px">Output-side active series (the series graph2otel is about to ship this export interval), after cardinality limiting — what actually gets billed. Push-based, so this is not a <code>/metrics</code> scrape.</p>
 
     {{if .Cardinality.Offenders}}
     <div class="sub-h">High-cardinality offenders</div>
     <table>
-      <thead><tr><th>Metric</th><th class="num">Series</th><th class="num">Headroom</th><th>State</th></tr></thead>
+      <thead><tr><th>Metric</th><th>Level</th><th class="num">Series</th><th class="num">Headroom</th></tr></thead>
       <tbody>
       {{range .Cardinality.Offenders}}
-        <tr class="bad"><td><code>{{.Metric}}</code></td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.PerMetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Capped}}<span class="badge err">uncounted</span>{{else}}<span class="badge warn">near limit</span>{{end}}</td></tr>
+        <tr class="t2o-row--alert"><td><code>{{.Metric}}</code></td><td class="sans">{{if .Capped}}<span class="badge err">{{stateGlyph "failed"}}uncounted</span>{{else}}<span class="badge warn">{{stateGlyph "limited"}}near limit</span>{{end}}</td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.PerMetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td></tr>
       {{end}}
       </tbody>
     </table>
@@ -371,10 +585,10 @@
     <div class="sub-h">Active series per metric</div>
     {{if .Cardinality.Metrics}}
     <table>
-      <thead><tr><th>Metric</th><th class="num">Series</th><th class="num">Headroom</th><th>State</th></tr></thead>
+      <thead><tr><th>Metric</th><th>Level</th><th class="num">Series</th><th class="num">Headroom</th></tr></thead>
       <tbody>
       {{range .Cardinality.Metrics}}
-        <tr><td><code>{{.Metric}}</code></td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.PerMetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Capped}}<span class="badge err">uncounted</span>{{else}}<span class="badge ok">ok</span>{{end}}</td></tr>
+        <tr><td><code>{{.Metric}}</code></td><td class="sans">{{if .Capped}}<span class="badge err">{{stateGlyph "failed"}}uncounted</span>{{else}}<span class="badge muted">{{shapeFor "ok"}}ok</span>{{end}}</td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.PerMetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td></tr>
       {{end}}
       </tbody>
     </table>
@@ -397,117 +611,155 @@
 var SVGNS='http://www.w3.org/2000/svg';
 var lastOkMs=Date.now(), pollTimer=null, paused=false;
 
+function ic(id,cls){ var s=document.createElementNS(SVGNS,'svg'); s.setAttribute('class',cls||'gl'); s.setAttribute('aria-hidden','true'); var u=document.createElementNS(SVGNS,'use'); u.setAttribute('href','#'+id); s.appendChild(u); return s; }
+// Glyph ids match stateGlyphName / shapeName in template.go.
+function stateGlyphId(state){
+  if(state==='healthy'||state==='healthy_empty')return 's-circle';
+  if(state==='limited'||state==='degraded')return 'i-warning';
+  if(state==='blocked')return 'i-prohibit';
+  if(state==='failed'||state==='startup_failed')return 'i-warning-circle';
+  if(state==='covered')return 'i-arrows-split';
+  return 's-ring';
+}
+function shapeId(cls){ return cls==='ok'?'s-circle':(cls==='err'?'s-diamond':'s-ring'); }
+function badge(cls,word,glyph,state){ var b=el('span',{'class':'badge '+cls}); if(state) b.setAttribute('data-state',state); if(glyph) b.appendChild(ic(glyph)); b.appendChild(document.createTextNode(word)); return b; }
+function setBadge(node,cls,word,extra){ if(!node) return; node.className='badge '+(extra?extra+' ':'')+cls; node.textContent=''; node.appendChild(ic(shapeId(cls))); node.appendChild(document.createTextNode(word)); }
+function headroomClass(p){ return p>60?'ok':(p>=20?'warn':'err'); }
+
 function showTab(id){
   var secs=document.querySelectorAll('section[data-tab]'), found=false;
   for(var i=0;i<secs.length;i++){ var on=secs[i].getAttribute('data-tab')===id; secs[i].classList.toggle('active',on); if(on) found=true; }
   var btns=document.querySelectorAll('#tabs .tab-btn');
-  for(var j=0;j<btns.length;j++){ btns[j].classList.toggle('active', btns[j].getAttribute('data-target')===id); }
+  for(var j=0;j<btns.length;j++){ var sel=btns[j].getAttribute('data-target')===id; btns[j].classList.toggle('active',sel); btns[j].setAttribute('aria-selected',sel?'true':'false'); btns[j].setAttribute('tabindex',sel?'0':'-1'); }
   if(found && location.hash!=='#'+id){ history.replaceState(null,'','#'+id); }
   // A chart inside a hidden section measures 0 wide, so anything drawn before
   // its tab was shown is wrong. Redraw whatever just became visible.
   redrawCharts();
 }
+function handleTabsKeydown(ev){
+  var k=ev.key; if(k!=='ArrowLeft'&&k!=='ArrowRight'&&k!=='Home'&&k!=='End') return;
+  var btns=[].slice.call(document.querySelectorAll('#tabs .tab-btn')), cur=btns.indexOf(document.activeElement); if(cur<0) cur=0;
+  var next=k==='Home'?0:(k==='End'?btns.length-1:(cur+(k==='ArrowRight'?1:-1)+btns.length)%btns.length);
+  ev.preventDefault(); btns[next].focus(); showTab(btns[next].getAttribute('data-target'));
+}
 function initTabs(){
   var btns=document.querySelectorAll('#tabs .tab-btn');
   for(var i=0;i<btns.length;i++){ (function(b){ b.addEventListener('click',function(){ showTab(b.getAttribute('data-target')); }); })(btns[i]); }
+  var nav=document.getElementById('tabs'); if(nav) nav.addEventListener('keydown',handleTabsKeydown);
   var initial=(location.hash||'').replace('#','');
   showTab(document.querySelector('section[data-tab="'+initial+'"]')?initial:'overview');
 }
-function currentTheme(){ var t=document.documentElement.getAttribute('data-theme'); if(t) return t; return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'; }
+// Light is the default; the OS preference applies only when nothing is stored, and an explicit data-theme wins.
+function currentTheme(){ var t=document.documentElement.getAttribute('data-theme'); if(t) return t; return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light'; }
 function toggleTheme(){ var next=currentTheme()==='light'?'dark':'light'; document.documentElement.setAttribute('data-theme',next); try{localStorage.setItem('graph2otel-theme',next);}catch(e){} redrawCharts(); }
 
 function el(tag,attrs,text){ var e=document.createElement(tag); if(attrs){ for(var k in attrs){ if(attrs.hasOwnProperty(k)) e.setAttribute(k,attrs[k]); } } if(text!=null) e.textContent=text; return e; }
 function setText(id,v){ var e=document.getElementById(id); if(e!=null && v!=null) e.textContent=v; }
 function relMs(ms){ var s=Math.round((Date.now()-ms)/1000); if(s<0)s=0; if(s<60)return s+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
-function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim()||'#4493f8'; }
-function filterAll(input){ var q=input.value.toLowerCase(); var rows=document.querySelectorAll('#tenants table tbody tr'); for(var i=0;i<rows.length;i++){ rows[i].style.display=rows[i].textContent.toLowerCase().indexOf(q)>-1?'':'none'; } }
+function applyFilter(){
+  var input=document.getElementById('collectorFilter'); if(!input) return;
+  var q=input.value.toLowerCase(), rows=document.querySelectorAll('#tenants table tbody tr'), shown=0;
+  for(var i=0;i<rows.length;i++){ var m=rows[i].textContent.toLowerCase().indexOf(q)>-1; rows[i].style.display=m?'':'none'; if(m) shown++; }
+  var c=document.getElementById('filterCount'); if(c) c.textContent=shown+' of '+rows.length;
+}
+function filterAll(){ applyFilter(); }
 
 function drawSpark(svg,arr){
   if(!svg) return; while(svg.firstChild) svg.removeChild(svg.firstChild);
   if(!arr || arr.length<2) return;
-  var W=100,H=24,n=arr.length,mn=arr[0],mx=arr[0],i;
+  var W=100,H=22,n=arr.length,mn=arr[0],mx=arr[0],i;
   for(i=1;i<n;i++){ if(arr[i]<mn)mn=arr[i]; if(arr[i]>mx)mx=arr[i]; }
   var span=(mx-mn)||1,pts='';
   for(i=0;i<n;i++){ var x=i*(W)/(n-1); var y=H-(arr[i]-mn)/span*H; pts+=(i?' ':'')+x.toFixed(1)+','+y.toFixed(1); }
   svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('preserveAspectRatio','none');
   var pl=document.createElementNS(SVGNS,'polyline'); pl.setAttribute('points',pts); svg.appendChild(pl);
 }
-function newSpark(){ var s=document.createElementNS(SVGNS,'svg'); s.setAttribute('class','spark'); return s; }
+function newSpark(){ var s=document.createElementNS(SVGNS,'svg'); s.setAttribute('class','spark'); s.setAttribute('aria-hidden','true'); return s; }
 
-// ── Line charts (zero-dependency: value axis, gridlines, area, hover) ──────
+// ── Line charts: the family small-chart standard ───────────────────────────
+// Geometry is frozen: padL 44 / padR 8 / padT 8 / padB 14. The three value
+// labels sit in the 44px gutter, OUTSIDE the plot, because an axis label over the
+// area fill fails AA in dark. Three series at most; slot 1 solid, slot 2 dashed,
+// slot 3 dotted, so colour is never the only carrier. Area only for one series.
 // CHARTS maps an <svg> id to the function that pulls its series out of the
 // latest status payload, so a refresh, a tab switch and a theme toggle can all
-// redraw every chart from one place.
+// redraw every chart from one place. A seriesFn returns null when the source is
+// switched off (rendered as such, never as a flat line at zero).
 var CHARTS={}, lastData=null;
-function registerChart(svgId,seriesFn,fmtFn){ CHARTS[svgId]={seriesFn:seriesFn,fmt:fmtFn||function(v){return String(Math.round(v));}}; }
-function redrawCharts(){ for(var id in CHARTS){ if(CHARTS.hasOwnProperty(id)){ var c=CHARTS[id]; drawChart(id,c.seriesFn(lastData),c.fmt); } } }
-function drawChart(svgId,series,fmt){
+var PAD_L=44, PAD_R=8, PAD_T=8, PAD_B=14;
+function registerChart(svgId,seriesFn,fmtFn,offMsg){ CHARTS[svgId]={seriesFn:seriesFn,fmt:fmtFn||function(v){return String(Math.round(v));},off:offMsg||'no data reported'}; }
+function redrawCharts(){ for(var id in CHARTS){ if(CHARTS.hasOwnProperty(id)){ var c=CHARTS[id]; drawChart(id,c.seriesFn(lastData),c.fmt,c.off); } } }
+function svgNode(tag,attrs){ var n=document.createElementNS(SVGNS,tag); for(var k in attrs){ if(attrs.hasOwnProperty(k)) n.setAttribute(k,attrs[k]); } return n; }
+function chartNote(svg,H,glyph,text){
+  var u=svgNode('use',{href:'#'+glyph,x:PAD_L-40,y:H/2-6,width:12,height:12,'class':'noteic'}); svg.appendChild(u);
+  var t=svgNode('text',{x:PAD_L-24,y:H/2+4,'class':'note'}); t.textContent=text; svg.appendChild(t);
+}
+function chartLegend(svg,series,fmt){
+  var wrap=svg.parentNode, card=wrap?wrap.parentNode:null, lg=card?card.querySelector('.legend'):null; if(!lg) return;
+  lg.textContent='';
+  series.forEach(function(s,si){
+    var item=el('span',{'class':'lg'}), sw=svgNode('svg',{viewBox:'0 0 14 6','aria-hidden':'true'});
+    sw.appendChild(svgNode('line',{x1:0,x2:14,y1:3,y2:3,'class':'ln s'+(si+1)}));
+    item.appendChild(sw);
+    item.appendChild(document.createTextNode(s.name+' '+(s.points.length?fmt(s.points[s.points.length-1]):'—')));
+    lg.appendChild(item);
+  });
+}
+function drawChart(svgId,series,fmt,offMsg){
   var svg=document.getElementById(svgId); if(!svg) return;
   var wrap=svg.parentNode, tip=wrap?wrap.querySelector('.chart-tip'):null;
   while(svg.firstChild) svg.removeChild(svg.firstChild);
-  series=(series||[]).filter(function(s){ return s.points && s.points.length; });
   var rect=svg.getBoundingClientRect();
-  var W=Math.max(rect.width||300,120), H=Math.max(rect.height||120,50);
+  var W=Math.max(rect.width||300,120), H=Math.max(rect.height||110,50);
   svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('preserveAspectRatio','none');
+  if(series===null){ chartLegend(svg,[],fmt); chartNote(svg,H,'s-ring',offMsg); return; }
+  series=series.filter(function(s){ return s.points && s.points.length; }).slice(0,3);
+  chartLegend(svg,series,fmt);
   var maxLen=0,mn=Infinity,mx=-Infinity;
   series.forEach(function(s){ maxLen=Math.max(maxLen,s.points.length); s.points.forEach(function(v){ if(v<mn)mn=v; if(v>mx)mx=v; }); });
-  // Fewer than two points is not a chart yet — say so rather than drawing a dot.
-  if(!series.length || maxLen<2){
-    var t=document.createElementNS(SVGNS,'text'); t.setAttribute('x',8); t.setAttribute('y',H/2);
-    t.setAttribute('fill',cssVar('--muted')); t.setAttribute('font-size','11'); t.textContent='collecting…';
-    svg.appendChild(t); return;
-  }
+  // Fewer than two points is not a chart yet: say so rather than drawing a dot.
+  if(!series.length || maxLen<2){ chartNote(svg,H,'i-info','collecting, '+maxLen+' of 2 samples'); return; }
   if(mn===mx){ mx=mn+1; }
-  var padL=44,padR=8,padT=8,padB=14, plotW=W-padL-padR, plotH=H-padT-padB;
-  function xAt(i){ return padL+i*plotW/(maxLen-1); }
-  function yAt(v){ return padT+(1-(v-mn)/(mx-mn))*plotH; }
+  var plotW=W-PAD_L-PAD_R, plotH=H-PAD_T-PAD_B;
+  function xAt(i){ return PAD_L+i*plotW/(maxLen-1); }
+  function yAt(v){ return PAD_T+(1-(v-mn)/(mx-mn))*plotH; }
   [0,0.5,1].forEach(function(f){
     var val=mn+(mx-mn)*f, y=yAt(val);
-    var ln=document.createElementNS(SVGNS,'line');
-    ln.setAttribute('x1',padL); ln.setAttribute('x2',W-padR); ln.setAttribute('y1',y); ln.setAttribute('y2',y);
-    ln.setAttribute('stroke',cssVar('--grid')); ln.setAttribute('stroke-width','1'); svg.appendChild(ln);
-    var tx=document.createElementNS(SVGNS,'text'); tx.setAttribute('x',4); tx.setAttribute('y',y+3);
-    tx.setAttribute('fill',cssVar('--muted')); tx.setAttribute('font-size','9');
-    tx.setAttribute('font-family','monospace'); tx.textContent=fmt(val); svg.appendChild(tx);
+    svg.appendChild(svgNode('line',{x1:PAD_L,x2:W-PAD_R,y1:y,y2:y,'class':'grid'}));
+    var tx=svgNode('text',{x:4,y:y+3,'class':'ax'}); tx.textContent=fmt(val); svg.appendChild(tx);
   });
-  var colors=[cssVar('--accent'),cssVar('--ok'),cssVar('--warn')];
   series.forEach(function(s,si){
-    var col=s.color||colors[si%colors.length];
     var pts=s.points.map(function(v,i){ return xAt(i)+','+yAt(v); }).join(' ');
-    if(si===0){
-      var area=document.createElementNS(SVGNS,'polygon');
-      area.setAttribute('points',xAt(0)+','+(padT+plotH)+' '+pts+' '+xAt(s.points.length-1)+','+(padT+plotH));
-      area.setAttribute('fill',col); area.setAttribute('opacity','0.10'); svg.appendChild(area);
+    if(series.length===1){
+      svg.appendChild(svgNode('polygon',{points:xAt(0)+','+(PAD_T+plotH)+' '+pts+' '+xAt(s.points.length-1)+','+(PAD_T+plotH),'class':'area'}));
     }
-    var pl=document.createElementNS(SVGNS,'polyline');
-    pl.setAttribute('fill','none'); pl.setAttribute('stroke',col); pl.setAttribute('stroke-width','1.5');
-    pl.setAttribute('points',pts); svg.appendChild(pl);
+    svg.appendChild(svgNode('polyline',{points:pts,'class':'ln s'+(si+1)}));
   });
   if(tip){
-    var cross=document.createElementNS(SVGNS,'line');
-    cross.setAttribute('stroke',cssVar('--muted')); cross.setAttribute('stroke-width','1');
-    cross.setAttribute('stroke-dasharray','2 2'); cross.setAttribute('y1',padT); cross.setAttribute('y2',padT+plotH);
-    cross.style.display='none'; svg.appendChild(cross);
-    var over=document.createElementNS(SVGNS,'rect');
-    over.setAttribute('x',padL); over.setAttribute('y',padT); over.setAttribute('width',plotW); over.setAttribute('height',plotH);
-    over.setAttribute('fill','transparent'); svg.appendChild(over);
+    var cross=svgNode('line',{y1:PAD_T,y2:PAD_T+plotH,'class':'cross'}); cross.style.display='none'; svg.appendChild(cross);
+    var dot=svgNode('circle',{r:2.5,'class':'dot'}); dot.style.display='none'; svg.appendChild(dot);
+    var over=svgNode('rect',{x:PAD_L,y:PAD_T,width:plotW,height:plotH,fill:'transparent'}); svg.appendChild(over);
     over.addEventListener('mousemove',function(ev){
       var b=svg.getBoundingClientRect();
       var px=(ev.clientX-b.left)*(W/b.width);
-      var i=Math.round((px-padL)/plotW*(maxLen-1)); if(i<0)i=0; if(i>maxLen-1)i=maxLen-1;
+      var i=Math.round((px-PAD_L)/plotW*(maxLen-1)); if(i<0)i=0; if(i>maxLen-1)i=maxLen-1;
       cross.setAttribute('x1',xAt(i)); cross.setAttribute('x2',xAt(i)); cross.style.display='';
+      var v1=series[0].points[Math.min(i,series[0].points.length-1)];
+      dot.setAttribute('cx',xAt(i)); dot.setAttribute('cy',yAt(v1)); dot.style.display='';
       var parts=series.map(function(s){ var v=s.points[Math.min(i,s.points.length-1)]; return s.name+' '+fmt(v); });
       tip.textContent=parts.join(' · '); tip.style.display='block';
-      tip.style.left=(xAt(i)/W*b.width)+'px'; tip.style.top=(padT/H*b.height)+'px';
+      tip.style.left=(xAt(i)/W*b.width)+'px'; tip.style.top=(PAD_T/H*b.height)+'px';
     });
-    over.addEventListener('mouseleave',function(){ cross.style.display='none'; tip.style.display='none'; });
+    over.addEventListener('mouseleave',function(){ cross.style.display='none'; dot.style.display='none'; tip.style.display='none'; });
   }
 }
 function outcomeStripEl(arr){
   var span=el('span',{'class':'outcome'}); if(!arr) return span;
-  var start=arr.length>40?arr.length-40:0;
-  for(var i=start;i<arr.length;i++){ var d=el('i'); if(!arr[i]) d.className='f'; span.appendChild(d); }
-  return span;
+  var start=arr.length>40?arr.length-40:0, failed=0;
+  for(var i=start;i<arr.length;i++){ var d=el('i'); if(!arr[i]){ d.className='f'; failed++; } span.appendChild(d); }
+  var holder=document.createDocumentFragment(); holder.appendChild(span);
+  if(arr.length) holder.appendChild(el('span',{'class':'ocount'},failed+' of '+(arr.length-start)+' failed'));
+  return holder;
 }
 function availabilityClass(state){
   if(state==='healthy'||state==='healthy_empty')return 'ok';
@@ -519,36 +771,57 @@ function availabilityClass(state){
 }
 function appendAvailability(td,c){
   var a=c.availability; if(!a)return false;
-  td.appendChild(el('span',{'class':'badge '+availabilityClass(a.state)},a.state||'unknown'));
+  var st=a.state||'unknown';
+  td.appendChild(badge(availabilityClass(st),st,stateGlyphId(st),st));
   var detail=a.reason||''; if(a.limitations&&a.limitations.length)detail+=(detail?' · ':'')+a.limitations.join(' · ');
-  if(detail){td.appendChild(document.createTextNode(' '));td.appendChild(el('span',{'class':'muted mono'},detail));}
+  var sub=el('span',{'class':'sub'},detail);
+  if(c.transport){ if(detail) sub.appendChild(document.createTextNode(' · ')); sub.appendChild(el('span',{'title':'resolved collector transport'},'via '+c.transport)); }
+  td.appendChild(sub);
   return true;
 }
 
 function collectorRow(c){
   if(c.enabled){
-    var tr=el('tr'); if(c.has_run && !c.last_success) tr.className='bad';
+    var tr=el('tr'); if(c.has_run && !c.last_success) tr.className='t2o-row--alert';
     var nameTd=el('td'); nameTd.appendChild(el('code',null,c.name));
-    if(c.state){ var cur=el('span',{'class':'cursor mono'}); if(c.state.kind==='blob'){ cur.textContent='cursor '+(c.state.byte_offset||0)+'B · '+(c.state.blobs_tracked||0)+' blobs'+(c.state.newest_blob?' · newest '+c.state.newest_blob:''); } else { cur.textContent=c.state.watermark?('watermark '+c.state.watermark+' · '+(c.state.staleness||'')+' behind'):'cold start'; } nameTd.appendChild(cur); }
+    if(c.state){ var cur=el('span',{'class':'cursor mono','title':'durable checkpoint cursor'}); if(c.state.kind==='blob'){ cur.textContent='cursor '+(c.state.byte_offset||0)+'B · '+(c.state.blobs_tracked||0)+' blobs'+(c.state.newest_blob?' · newest '+c.state.newest_blob:''); } else { cur.textContent=c.state.watermark?('watermark '+c.state.watermark+' · '+(c.state.staleness||'')+' behind'):'cold start'; } nameTd.appendChild(cur); }
     tr.appendChild(nameTd);
-    var stTd=el('td'); if(!appendAvailability(stTd,c)){ if(!c.has_run) stTd.appendChild(el('span',{'class':'badge pending'},'starting')); else if(c.last_success) stTd.appendChild(el('span',{'class':'badge ok'},'ok')); else stTd.appendChild(el('span',{'class':'badge err'},'failing')); } if(c.transport){ stTd.appendChild(document.createTextNode(' ')); stTd.appendChild(el('span',{'class':'muted mono','title':c.availability?'resolved collector transport':'ingest transport'},'via '+c.transport)); } tr.appendChild(stTd);
+    var stTd=el('td',{'class':'sans'});
+    if(!appendAvailability(stTd,c)){
+      if(!c.has_run) stTd.appendChild(badge('pending','starting','s-ring')); else if(c.last_success) stTd.appendChild(badge('ok','ok','s-circle')); else stTd.appendChild(badge('err','failing','s-diamond'));
+      if(c.transport){ var vs=el('span',{'class':'sub'}); vs.appendChild(el('span',{'title':'ingest transport'},'via '+c.transport)); stTd.appendChild(vs); }
+    }
+    tr.appendChild(stTd);
     tr.appendChild(el('td',{'class':'num'}, (c.interval_seconds||0)+'s'));
     tr.appendChild(el('td',{'class':'num'}, c.has_run?Math.round(c.success_rate_pct)+'%':'—'));
     tr.appendChild(el('td',{'class':'num'}, String(c.runs||0)));
     tr.appendChild(el('td',{'class':'num'}, String(c.failures||0)+(c.consecutive_failures>0?' ('+c.consecutive_failures+'×)':'')));
-    var nrTd=el('td',{'class':'num'}); if(!c.has_run) nrTd.appendChild(el('span',{'class':'muted'},'—')); else if(c.overdue) nrTd.appendChild(el('span',{'class':'badge warn'},'overdue')); else nrTd.textContent=(c.next_run_in_seconds<=0?'due':(c.next_run_in||'due')); tr.appendChild(nrTd);
+    var nrTd=el('td',{'class':'num'}); if(!c.has_run) nrTd.appendChild(el('span',{'class':'muted'},'—')); else if(c.overdue) nrTd.appendChild(el('span',{'class':'overdue'},'overdue')); else nrTd.textContent=(c.next_run_in_seconds<=0?'due':(c.next_run_in||'due')); tr.appendChild(nrTd);
     tr.appendChild(el('td',{'class':'num'}, c.has_run?(c.last_duration_ms+'ms'):'—'));
-    var recTd=el('td'); if(c.duration_ms_series && c.duration_ms_series.length>1){ var sp=newSpark(); recTd.appendChild(sp); drawSpark(sp,c.duration_ms_series); } recTd.appendChild(outcomeStripEl(c.outcome_series)); tr.appendChild(recTd);
+    var recTd=el('td',{'class':'recent'}); if(c.duration_ms_series && c.duration_ms_series.length>1){ var sp=newSpark(); recTd.appendChild(sp); drawSpark(sp,c.duration_ms_series); } recTd.appendChild(outcomeStripEl(c.outcome_series)); tr.appendChild(recTd);
     tr.appendChild(el('td',{'class':'num'}, c.has_run?(c.staleness||''):'—'));
-    var erTd=el('td',{'class':'mono'}); if(c.last_error) erTd.textContent=c.last_error; else erTd.appendChild(el('span',{'class':'muted'},'—')); tr.appendChild(erTd);
+    var erTd=el('td',{'class':'err'}); if(c.last_error) erTd.textContent=c.last_error; else erTd.appendChild(el('span',{'class':'muted'},'—')); tr.appendChild(erTd);
     return tr;
   }
   if(c.covered_by){
-    var tr2=el('tr'); tr2.appendChild(el('td')).appendChild(el('code',null,c.name)); var cTd=el('td'); if(!appendAvailability(cTd,c))cTd.appendChild(el('span',{'class':'badge info'},'covered')); if(c.availability&&c.transport){cTd.appendChild(document.createTextNode(' '));cTd.appendChild(el('span',{'class':'muted mono','title':'resolved collector transport'},'via '+c.transport));} tr2.appendChild(cTd); var coveredTd=el('td',{'class':'mono muted','colspan':'9'}); coveredTd.appendChild(document.createTextNode('collected via ')); coveredTd.appendChild(el('code',null,c.covered_by.collector)); coveredTd.appendChild(document.createTextNode(' ')); coveredTd.appendChild(el('span',{'title':'covering collector transport'},'('+c.covered_by.transport+')')); if(!c.availability)coveredTd.appendChild(document.createTextNode(' · polled form off by design')); tr2.appendChild(coveredTd); return tr2;
+    var tr2=el('tr'); tr2.appendChild(el('td')).appendChild(el('code',null,c.name)); var cTd=el('td',{'class':'sans'});
+    if(!appendAvailability(cTd,c)) cTd.appendChild(badge('info','covered','i-arrows-split'));
+    else { /* appendAvailability put the reason on the state line; the detail cell repeats it, so keep only the badge here */ while(cTd.childNodes.length>1) cTd.removeChild(cTd.lastChild); if(c.transport){ var cs=el('span',{'class':'sub'}); cs.appendChild(el('span',{'title':'resolved collector transport'},'via '+c.transport)); cTd.appendChild(cs); } }
+    tr2.appendChild(cTd); var coveredTd=el('td',{'class':'mono muted','colspan':'9'}); coveredTd.appendChild(document.createTextNode('collected via ')); coveredTd.appendChild(el('code',null,c.covered_by.collector)); coveredTd.appendChild(document.createTextNode(' ')); coveredTd.appendChild(el('span',{'title':'covering collector transport'},'('+c.covered_by.transport+')'));
+    if(c.availability){ var cd=c.availability.reason||''; if(c.availability.limitations&&c.availability.limitations.length) cd+=(cd?' · ':'')+c.availability.limitations.join(' · '); if(cd) coveredTd.appendChild(document.createTextNode(' · '+cd)); } else coveredTd.appendChild(document.createTextNode(' · polled form off by design'));
+    tr2.appendChild(coveredTd); return tr2;
   }
-  var tr3=el('tr',{'class':'skip'}); tr3.appendChild(el('td')).appendChild(el('code',null,c.name)); var sTd=el('td'); if(!appendAvailability(sTd,c))sTd.appendChild(el('span',{'class':'badge '+skipClass(c.skip_category)}, c.skip_category||'skipped')); tr3.appendChild(sTd); var skipTd=el('td',{'class':'mono muted','colspan':'9'},c.availability?'':('skipped — '+(c.skip_reason||''))); if(c.transport){ if(skipTd.textContent)skipTd.appendChild(document.createTextNode(' · ')); skipTd.appendChild(el('span',{'title':c.availability?'resolved collector transport':'ingest transport'},'via '+c.transport)); } tr3.appendChild(skipTd); return tr3;
+  var tr3=el('tr'); tr3.appendChild(el('td')).appendChild(el('code',null,c.name)); var sTd=el('td',{'class':'sans'});
+  if(c.availability){ var as=c.availability.state||'unknown'; sTd.appendChild(badge(availabilityClass(as),as,stateGlyphId(as),as)); }
+  else { var sc=skipClass(c.skip_category); sTd.appendChild(badge(sc,c.skip_category||'skipped',skipGlyphId(c.skip_category))); }
+  tr3.appendChild(sTd);
+  var skipTd=el('td',{'class':'mono muted','colspan':'9'});
+  if(c.availability){ var sd=c.availability.reason||''; if(c.availability.limitations&&c.availability.limitations.length) sd+=(sd?' · ':'')+c.availability.limitations.join(' · '); skipTd.textContent=sd; } else skipTd.textContent='skipped — '+(c.skip_reason||'');
+  if(c.transport){ if(skipTd.textContent)skipTd.appendChild(document.createTextNode(' · ')); skipTd.appendChild(el('span',{'title':c.availability?'resolved collector transport':'ingest transport'},'via '+c.transport)); }
+  tr3.appendChild(skipTd); return tr3;
 }
 function skipClass(cat){ if(cat==='license')return 'warn'; if(cat==='experimental')return 'info'; return 'muted'; }
+function skipGlyphId(cat){ if(cat==='license')return 'i-warning'; if(cat==='experimental')return 'i-info'; return ''; }
 
 function tenantSummary(t){
   var parts=[t.enabled_count+' active'];
@@ -560,26 +833,32 @@ function tenantSummary(t){
 }
 function rebuildTenants(tenants){
   var host=document.getElementById('tenants'); if(!host) return; host.textContent='';
-  if(!tenants || !tenants.length){ host.appendChild(el('p',{'class':'muted'},'No tenants configured.')); return; }
+  if(!tenants||!tenants.length){ host.appendChild(el('p',{'class':'muted'},'No tenants configured.')); applyFilter(); return; }
   tenants.forEach(function(t){
     var h=el('div',{'class':'sub-h'}); h.appendChild(document.createTextNode('Tenant ')); h.appendChild(el('code',null,t.tenant_id)); h.appendChild(el('span',{'class':'tsum'}, tenantSummary(t))); host.appendChild(h);
-    if(t.startup_failure){ var sf=el('div',{'class':'reasons'}); sf.appendChild(el('span',{'class':'badge err'},'startup failed')); sf.appendChild(document.createTextNode(' ')); sf.appendChild(el('code',null,t.startup_failure.code)); sf.appendChild(document.createTextNode(' · '+t.startup_failure.reason)); host.appendChild(sf); }
-    var table=el('table'); var thead=el('thead'); thead.innerHTML='<tr><th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th><th class="num">Runs</th><th class="num">Failures</th><th class="num">Next run</th><th class="num">Duration</th><th>Recent</th><th>Staleness</th><th>Last error</th></tr>'; table.appendChild(thead);
+    if(t.startup_failure){ var sf=el('div',{'class':'reasons'}); sf.appendChild(badge('err','startup failed','s-diamond')); sf.appendChild(document.createTextNode(' ')); sf.appendChild(el('code',null,t.startup_failure.code)); sf.appendChild(document.createTextNode(' · '+t.startup_failure.reason)); host.appendChild(sf); }
+    var table=el('table',{'class':'ctable'}); var thead=el('thead'); thead.innerHTML='<tr><th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th><th class="num">Runs</th><th class="num">Failures</th><th class="num">Next run</th><th class="num">Duration</th><th>Recent</th><th>Staleness</th><th>Last error</th></tr>'; table.appendChild(thead);
     var tb=el('tbody');
     var cols=(t.collectors||[]);
     if(!cols.length){ var tr0=el('tr'); tr0.appendChild(el('td',{'colspan':'11','class':'muted'},'No collectors registered or skipped for this tenant.')); tb.appendChild(tr0); }
     else cols.forEach(function(c){ tb.appendChild(collectorRow(c)); });
     table.appendChild(tb); host.appendChild(table);
   });
+  applyFilter();
 }
 function rebuildThrottle(tenants){
   var host=document.getElementById('throttle'); if(!host) return; host.textContent='';
   (tenants||[]).forEach(function(t){
     if(!t.rate_limits || !t.rate_limits.length) return;
     var h=el('div',{'class':'sub-h'}); h.style.margin='14px 0 4px'; h.appendChild(document.createTextNode('Tenant ')); h.appendChild(el('code',null,t.tenant_id)); host.appendChild(h);
-    var table=el('table',{'class':'rl'}); var thead=el('thead'); thead.innerHTML='<tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th></tr>'; table.appendChild(thead);
+    var table=el('table',{'class':'rl'}); var thead=el('thead'); thead.innerHTML='<tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th><th>trend</th></tr>'; table.appendChild(thead);
     var tb=el('tbody');
-    t.rate_limits.forEach(function(r){ var tr=el('tr'); tr.appendChild(el('td')).appendChild(el('code',null,r.workload)); tr.appendChild(el('td',{'class':'num'}, Number(r.limit_per_sec).toPrecision(3))); tr.appendChild(el('td',{'class':'num'}, String(r.burst))); tr.appendChild(el('td',{'class':'num'}, Number(r.tokens_available).toFixed(1))); tr.appendChild(el('td',{'class':'num'}, Math.round(r.headroom_pct)+'%')); tb.appendChild(tr); });
+    t.rate_limits.forEach(function(r){
+      var hc='hr-'+headroomClass(r.headroom_pct);
+      var tr=el('tr'); tr.appendChild(el('td')).appendChild(el('code',null,r.workload)); tr.appendChild(el('td',{'class':'num'}, Number(r.limit_per_sec).toPrecision(3))); tr.appendChild(el('td',{'class':'num'}, String(r.burst))); tr.appendChild(el('td',{'class':'num'}, Number(r.tokens_available).toFixed(1))); tr.appendChild(el('td',{'class':'num '+hc}, Math.round(r.headroom_pct)+'%'));
+      var trTd=el('td',{'class':hc}); if(r.headroom_series && r.headroom_series.length>1){ var sp=newSpark(); trTd.appendChild(sp); drawSpark(sp,r.headroom_series); } tr.appendChild(trTd);
+      tb.appendChild(tr);
+    });
     table.appendChild(tb); host.appendChild(table);
   });
 }
@@ -601,22 +880,30 @@ function updateTrends(d){
     setText('meanDuration', Math.round(d.fleet.mean_duration_ms||0)+'ms');
   }
 }
+function setTabCount(id,n){ var w=document.getElementById(id); if(!w) return; w.hidden=!(n>0); setText(id+'N',n); }
 function updateRollup(d){
-  setText('ruHealth', d.health); setText('ruReadiness', d.readiness ? d.readiness.state : ''); setText('ruTenants', (d.tenants||[]).length);
+  var ready=d.readiness&&d.readiness.ready;
+  var hc=d.health==='healthy'?'ok':(d.health==='degraded'?'err':'pending');
+  var rh=document.getElementById('ruHealth'); if(rh){ rh.textContent=d.health; rh.className='rv '+hc; }
+  var rr=document.getElementById('ruReadiness'); if(rr){ rr.textContent=d.readiness ? d.readiness.state : ''; rr.className='rv '+(ready?'ok':'err'); }
+  setText('ruTenants', (d.tenants||[]).length);
   var enabled=0,failing=0,pending=0;
   (d.tenants||[]).forEach(function(t){ enabled+=t.enabled_count||0; failing+=t.failing_count||0; pending+=t.pending_count||0; });
   setText('ruEnabled',enabled); setText('ruFailing',failing); setText('ruPending',pending);
+  var rf=document.getElementById('ruFailing'); if(rf) rf.className='rv'+(failing>0?' err':'');
+  setTabCount('tabFailing',failing);
 }
 function updateDelivery(d){
   if(!d.delivery || !document.getElementById('deliveryStatus')) return;
   [['metric',d.delivery.metrics],['log',d.delivery.logs]].forEach(function(row){
     var prefix=row[0], signal=row[1]||{}, state=document.getElementById(prefix+'DeliveryState');
-    if(state){ state.textContent=signal.state||''; state.className='badge '+(signal.state==='healthy'?'ok':signal.state==='degraded'?'err':'pending'); }
+    if(state) setBadge(state, signal.state==='healthy'?'ok':signal.state==='degraded'?'err':'pending', signal.state||'');
     setText(prefix+'DeliveryAttempts',signal.export_attempts);
     setText(prefix+'DeliverySuccesses',signal.export_successes);
     setText(prefix+'DeliveryFailures',signal.export_failures);
     setText(prefix+'DeliveryFlushFailures',signal.force_flush_failures);
     setText(prefix+'DeliveryShutdownFailures',signal.shutdown_failures);
+    var fl=document.getElementById(prefix+'DeliveryFlushLine'); if(fl) fl.hidden=!(signal.force_flush_failures>0||signal.shutdown_failures>0);
     var success=document.getElementById(prefix+'DeliveryLastSuccess');
     if(success) success.textContent='last success '+(signal.last_success_at||'—');
     var failure=document.getElementById(prefix+'DeliveryLastFailure');
@@ -662,7 +949,7 @@ function rebuildCapacity(c){
       [r.tenant_id,r.collector,r.ingest_transport,r.traffic_class,r.attribution,r.allocated_payload_bytes,r.interval_microunits,r.projected_period_microunits].forEach(function(v,i){
         var td=el('td',i>=5?{'class':'num'}:null);
         if(i<2) td.appendChild(el('code',null,String(v)));
-        else if(i===4) td.appendChild(el('span',{'class':'badge warn'},String(v)));
+        else if(i===4) td.appendChild(el('span',{'class':'chip'},String(v)));
         else td.textContent=String(v);
         tr.appendChild(td);
       });
@@ -672,14 +959,15 @@ function rebuildCapacity(c){
   }
 }
 function setHealth(d){
-  var b=document.getElementById('healthBadge'); if(b){ b.textContent=d.health; b.className='badge '+(d.health==='healthy'?'ok':d.health==='degraded'?'err':'pending'); b.title=(d.health_reasons||[]).join('\n'); }
-  var rb=document.getElementById('healthReasons'); if(rb){ if(d.health_reasons && d.health_reasons.length){ rb.textContent=d.health_reasons.join(' · '); rb.style.display=''; } else { rb.style.display='none'; } }
+  var cls=d.health==='healthy'?'ok':d.health==='degraded'?'err':'pending';
+  var b=document.getElementById('healthBadge'); if(b){ setBadge(b,cls,d.health,'chip'); b.title=(d.health_reasons||[]).join('\n'); }
+  var rb=document.getElementById('healthReasons'); if(rb){ if(d.health_reasons && d.health_reasons.length){ setText('healthReasonsText',d.health_reasons.join(' · ')); rb.hidden=false; } else { rb.hidden=true; } }
 }
 function setReadiness(d){
   var r=d.readiness||{};
-  var b=document.getElementById('readinessBadge'); if(b){ b.textContent=r.state||''; b.className='badge '+(r.ready?'ok':'err'); b.title=r.reason||''; }
+  var b=document.getElementById('readinessBadge'); if(b){ setBadge(b,r.ready?'ok':'err',r.state||'','chip'); b.title=r.reason||''; }
 }
-function setStale(on){ var b=document.getElementById('staleBanner'); if(!b) return; if(on){ b.className='show'; b.textContent='⚠ disconnected — last successful update '+relMs(lastOkMs); } else { b.className=''; } }
+function setStale(on){ var b=document.getElementById('staleBanner'); if(!b) return; if(on){ b.className='show'; setText('staleMsg','Disconnected. Last successful update '+relMs(lastOkMs)+'.'); } else { b.className=''; } }
 
 function refresh(){
   fetch('/api/status.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); }).then(function(d){
@@ -698,20 +986,21 @@ function tickFreshness(){ setText('updatedAgo', relMs(lastOkMs)); var b=document
 function initCharts(){
   registerChart('chGoroutines', function(d){ return d&&d.runtime ? [{name:'goroutines', points:d.runtime.goroutines_series||[]}] : []; });
   registerChart('chHeap', function(d){ return d&&d.runtime ? [{name:'heap', points:(d.runtime.heap_alloc_series||[]).map(function(b){ return b/1048576; })}] : []; }, function(v){ return v.toFixed(0)+'M'; });
-  registerChart('chGC', function(d){ return d&&d.runtime ? [{name:'gc/s', color:cssVar('--warn'), points:d.runtime.gc_rate_series||[]}] : []; }, function(v){ return v.toFixed(1); });
+  registerChart('chGC', function(d){ return d&&d.runtime ? [{name:'gc/s', points:d.runtime.gc_rate_series||[]}] : []; }, function(v){ return v.toFixed(1); });
   registerChart('chEmit', function(d){ return d&&d.throughput ? [
     {name:'metrics/s', points:d.throughput.metric_points_series||[]},
     {name:'logs/s', points:d.throughput.log_records_series||[]}] : []; }, function(v){ return v.toFixed(1); });
-  registerChart('chCard', function(d){ return d&&d.cardinality ? [{name:'series', points:d.cardinality.series||[]}] : []; });
-  registerChart('chFailing', function(d){ return d&&d.fleet ? [{name:'failing', color:cssVar('--err'), points:d.fleet.failing_series||[]}] : []; });
+  registerChart('chCard', function(d){ if(!d) return []; var s=d.cardinality&&d.cardinality.series; return (s&&s.length) ? [{name:'series', points:s}] : null; }, null, 'none yet, or self-observability off');
+  registerChart('chFailing', function(d){ return d&&d.fleet ? [{name:'failing', points:d.fleet.failing_series||[]}] : []; });
   registerChart('chDuration', function(d){ return d&&d.fleet ? [{name:'mean', points:d.fleet.mean_duration_series||[]}] : []; }, function(v){ return v.toFixed(0)+'ms'; });
 }
 
 (function init(){
-  initTabs(); initCharts();
+  initTabs(); initCharts(); applyFilter();
   var tt=document.getElementById('themeToggle'); if(tt) tt.addEventListener('click',toggleTheme);
   var p=document.getElementById('pauseBtn'); if(p) p.addEventListener('click',togglePause);
   var rn=document.getElementById('refreshNow'); if(rn) rn.addEventListener('click',function(ev){ ev.preventDefault(); refresh(); });
+  var rt=document.getElementById('retryNow'); if(rt) rt.addEventListener('click',function(){ refresh(); });
   refresh(); startPolling(); setInterval(tickFreshness,1000);
   window.addEventListener('resize',redrawCharts);
 })();
