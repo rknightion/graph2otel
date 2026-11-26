@@ -504,12 +504,12 @@ class TestOperatorPausedRules(unittest.TestCase):
     rule as drift."""
 
     TARGET = "g2o-intune-compliance-ratio-low"
-    TEAMS = {
+    TEAMS = frozenset({
         "g2o-teams-call-records-stale", "g2o-teams-healthy-call-share-low",
         "g2o-teams-service-incident-open", "g2o-teams-site-network-noncompliant",
         "g2o-teams-site-poor-stream-share-high", "g2o-teams-trunk-effectiveness-low",
         "g2o-teams-trunk-sip-5xx-high",
-    }
+    })
 
     def _live_stack(self, paused_live=()):
         out = {}
@@ -606,8 +606,8 @@ class TestOperatorPausedRules(unittest.TestCase):
                 if active:
                     args.append("--activate-teams")
 
-                def fetch(context, names):
-                    return {uid: live[uid] for uid in names if uid in live}
+                def fetch(context, names, fixture=live):
+                    return {uid: fixture[uid] for uid in names if uid in fixture}
 
                 with mock.patch.object(sys, "argv", args), \
                         mock.patch.object(rules_deploy, "gcx", return_value=[]), \

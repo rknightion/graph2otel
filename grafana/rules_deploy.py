@@ -433,7 +433,7 @@ def project_all(include_detections: bool = True) -> dict:
 
 
 def readback(context: str, include_detections: bool = True,
-             paused: "set | frozenset" = frozenset(), *, resumed=frozenset()) -> dict:
+             paused: set | frozenset = frozenset(), *, resumed=frozenset()) -> dict:
     """Compare every generated rule, with stack pause choices, against live content."""
     projected = project_all(include_detections)
     for name, state in _pause_overrides(paused, resumed).items():
