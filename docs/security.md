@@ -102,6 +102,5 @@ If you want less exposure, use the levers below — not the cardinality rule.
 
 ## License
 
-`graph2otel` is licensed under the GNU Affero General Public License v3.0 only
-(`AGPL-3.0-only`) — see
-[`LICENSE`](https://github.com/rknightion/graph2otel/blob/main/LICENSE).
+`graph2otel` is licensed under the Apache License, Version 2.0 (`Apache-2.0`).
+See [`LICENSE`](https://github.com/rknightion/graph2otel/blob/main/LICENSE).

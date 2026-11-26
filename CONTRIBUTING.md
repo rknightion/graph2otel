@@ -33,7 +33,7 @@ Helm and GoReleaser legs, so you may leave `just ci` (the container smoke leg) t
 - Recipes marked `[confirm]` write to a live Grafana stack. Do not run them, and never pass `--yes`.
 - Commit subjects are Conventional Commits; release-please builds the changelog and cuts releases
   from them, and maintainers merge its release pull request.
-- By contributing you agree your work is licensed under the project license (`AGPL-3.0-only`, see
+- By contributing you agree your work is licensed under the project license (`Apache-2.0`, see
   [LICENSE](./LICENSE)). There is no DCO or CLA. For a larger change, open an issue to discuss the
   approach first.
 <!-- vended:repo-facts:end -->

@@ -29,7 +29,7 @@ maintainers:
     url: https://github.com/rknightion
 annotations:
   artifacthub.io/category: monitoring-logging
-  artifacthub.io/license: AGPL-3.0
+  artifacthub.io/license: Apache-2.0
   artifacthub.io/prerelease: 'false'
   artifacthub.io/links: |
     - name: Documentation

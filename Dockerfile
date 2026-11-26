@@ -38,11 +38,10 @@ RUN install -d -m 0750 -o 65532 -g 65532 /out/checkpoints
 # ---- runtime ----
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:8ce6dd87e9823c5b48dcfb2c8604714ccb351ce59607327bcc4957448da279b5
 COPY --from=build /out/graph2otel /usr/local/bin/graph2otel
-# License compliance travels with the image (OCI /licenses convention): the AGPL
-# text plus the verbatim third-party module notices generated in the build stage.
+# The image carries the project licence and the generated third-party notices.
 COPY --from=build /src/LICENSE /licenses/LICENSE
 COPY --from=build /THIRD_PARTY_NOTICES.md /licenses/THIRD_PARTY_NOTICES.md
-LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 # config.example.yaml is copied for reference only; it is NOT loaded by default.
 # The binary runs from built-in defaults + G2O_* environment variables. To use a
 # config file, mount it and pass --config /path/to/config.yaml, e.g.:
