@@ -244,14 +244,19 @@ sbom target="bin/graph2otel" name="graph2otel" out="dist/sbom": _tools-sbom
 # deploy the generated alert rules to a Grafana stack (create-or-update, WRITES); pause = rule names kept paused
 [confirm('This writes alert rules to a live Grafana stack. Continue?')]
 [group('infra')]
-rules-push context folder="graph2otel" include_detections="0" pause="":
-    @python3 grafana/rules_deploy.py --context '{{ context }}' --folder-title '{{ folder }}' --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }}
+rules-push context folder="graph2otel" include_detections="0" pause="" activate_teams="0" teams_transition="0":
+    @python3 grafana/rules_deploy.py --context '{{ context }}' --folder-title '{{ folder }}' --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }} {{ if activate_teams == "1" { "--activate-teams" } else { "" } }} {{ if teams_transition == "1" { "--teams-transition" } else { "" } }}
 
 # prove a Grafana stack still matches the repository's rules; read-only
 [group('infra')]
 [no-exit-message]
-rules-readback context include_detections="0" pause="":
-    @python3 grafana/rules_deploy.py --context '{{ context }}' --readback-only --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }}
+rules-readback context include_detections="0" pause="" activate_teams="0":
+    @python3 grafana/rules_deploy.py --context '{{ context }}' --readback-only --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }} {{ if activate_teams == "1" { "--activate-teams" } else { "" } }}
+
+# validate alert pause choices before any stack writes; no network calls
+[group('infra')]
+rules-validate context include_detections="0" pause="" activate_teams="0":
+    @python3 grafana/rules_deploy.py --context '{{ context }}' --validate-only --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }} {{ if activate_teams == "1" { "--activate-teams" } else { "" } }}
 
 # run the read-only Grafana semantic canary against a live stack (JSON receipt on stdout)
 [group('infra')]
