@@ -80,10 +80,10 @@ LC_ALL=C sort -t "$(printf '\t')" -k1,1 "$raw" > "$tsv"
 <!-- This file is a build/release artifact regenerated on every dependency change; it is
      baked into the container image at /licenses/ and attached to each GitHub Release. -->
 
-graph2otel is licensed under **AGPL-3.0-only** (see LICENSE). The compiled binary
-incorporates the third-party Go modules listed below. Each module's license text — and
-its NOTICE file where one is provided — is reproduced verbatim. These modules retain their
-own upstream licenses; the combined binary is distributed under AGPL-3.0-only.
+graph2otel is licensed under **Apache-2.0** (see LICENSE). The compiled binary
+incorporates the third-party Go modules listed below, which retain their upstream
+licences. Each module's licence text and any supplied NOTICE file are reproduced
+verbatim.
 HDR
 
   while IFS="$(printf '\t')" read -r name version lic url path; do
