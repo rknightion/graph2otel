@@ -62,6 +62,8 @@ var (
 		"audio": "audio", "main-audio": "audio", "video": "video", "main-video": "video", "screensharing": "sharing",
 		"applicationsharing": "sharing", "main-appsharing": "sharing", "main-applicationsharing": "sharing",
 		"videobasedscreensharing": "sharing", "vbss": "sharing", "main-vbss": "sharing",
+		// live-measured: #708 (Teams observability review) observed media_label=data.
+		"data": "data",
 	})
 	directions    = dimension(map[string]string{"callertocallee": "caller_to_callee", "calleetocaller": "callee_to_caller"})
 	transports    = enumDimension(unknown, "tcp", "udp")

@@ -155,8 +155,23 @@ inbound/outbound reference point. Legacy application sharing also lacks CQD's
 spoiled tile percentage, RDP tile processing latency and relative one-way delay.
 These unsupported cases are `unclassified` with `unsupported_sharing_stats`.
 Ordinary video loss, RTP frame rates with ambiguous media labels and network RTT
-are not substitutes for those inputs. These mappings are docs-derived, not
-live-measured.
+are not substitutes for those inputs. These sharing mappings are docs-derived,
+not live-measured.
+
+Graph's `media.label=data` was observed in the Teams review
+`[live-measured, #708 (Teams observability review)]`. `teams.call_stream`
+keeps the original token in `media_label` and reports the bounded `media=data`.
+It stays `unclassified` with `unsupported_media`: there is no CQD threshold,
+no audio transport judgement and no inferred measurement. Generic network
+measurements can still be reported for `data` when Graph supplies them. Other
+unrecognised tokens still use `media=unknown`; the wire-value watchdog reports
+them when the stream is counted in metrics.
+
+**Compatibility:** new stream logs and first-version metrics can use the
+additional `media=data` value. Existing series and stored rows are not
+rewritten. Queries with an explicit list of media values should include `data`
+if they mean all streams; for historical stream logs, `media_label="data"`
+also finds those previously grouped under `media=unknown`.
 
 TCP on media that prefers UDP is evidence, not a poor verdict. Legacy RDP TCP
 is expected. A relay address means allocation only; the Graph network projection
@@ -220,15 +235,15 @@ also go through the central limiter, which folds rejected synchronous points for
 this family into a single `other` series without site attribution per tenant and
 metric. The client snapshot uses the ordinary central gauge limiter.
 
-| OTLP metric | Maximum label sets per tenant before central clipping | Observation |
+| OTLP metric | Upper bound on label sets per tenant before central clipping | Observation |
 | --- | ---: | --- |
 | `teams.calls` | 243 | Type × three health values × three values for each modality flag |
 | `teams.call.health_transitions` | 6 | Distinct ordered pairs of the three health values |
 | `teams.call.metrics_skipped` | 2 | Capacity or changed source start |
-| `teams.streams` | 356,400 | Media × direction × valid health/cause pairs × transport × connection × platform × site |
-| `teams.stream.rtt`, `teams.stream.jitter`, `teams.stream.packet_loss` | 1,080 each | Media × direction × site × connection; classic Mimir histogram uses up to 15 series per set for duration or 13 for loss |
+| `teams.streams` | 145,800 | 18 valid media/health/cause combinations × direction × transport × connection × platform × site |
+| `teams.stream.rtt`, `teams.stream.jitter`, `teams.stream.packet_loss` | 1,350 each | Media × direction × site × connection; classic Mimir histogram uses up to 15 series per set for duration or 13 for loss |
 | `teams.stream.transport` | 36 | Site × known TCP/UDP; audio only |
-| `teams.stream.feedback` | 24 | Media × rating; one per session side and media, excluding `notRated` |
+| `teams.stream.feedback` | 30 | Media × rating; one per session side and media, excluding `notRated` |
 | `teams.call.failures` | 6 | Distinct failure stage and reason bucket per call, even when no stream was returned. Free text only distinguishes `other` from `unspecified` |
 | `teams.client_versions` | 1,100 | Platform × product family × version bucket. Each recent call contributes once per bucket, not once per user or stream |
 
