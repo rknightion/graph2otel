@@ -51,6 +51,15 @@ RULE_KIND = "alertrules.v0alpha1.rules.alerting.grafana.app"
 COMPARED = ("title", "for", "noDataState", "execErrState", "trigger",
             "labels", "annotations", "expressions")
 
+# Keep the opt-in bounded to the seven reviewed rules. A future Teams rule
+# needs its own activation decision; it must not ride along on this switch.
+TEAMS_ALERT_UIDS = frozenset({
+    "g2o-teams-call-records-stale", "g2o-teams-healthy-call-share-low",
+    "g2o-teams-service-incident-open", "g2o-teams-site-network-noncompliant",
+    "g2o-teams-site-poor-stream-share-high", "g2o-teams-trunk-effectiveness-low",
+    "g2o-teams-trunk-sip-5xx-high",
+})
+
 
 class DeployError(RuntimeError):
     """Operational failure: gcx, auth, transport, or a malformed response."""
@@ -378,17 +387,21 @@ def parse_paused(value: str) -> set:
     return set(value.replace(",", " ").split())
 
 
-def pause_manifests(manifests: dict, names: set) -> dict:
-    """The manifests with `paused: true` for every rule named in `names`.
+def _pause_overrides(paused, resumed) -> dict:
+    overlap = sorted(paused & resumed)
+    if overlap:
+        raise DeployError("cannot both pause and activate: " + ", ".join(overlap))
+    return dict.fromkeys(paused, True) | dict.fromkeys(resumed, False)
 
-    An operator can pause a generated rule on their own stack without forking
-    the generator. Without this a deploy unpauses it on every run, because the
-    committed manifest says `paused: false`. The rewrite is of the one generated
-    `spec.paused` line, so a manifest without exactly one is an error rather
-    than a silent no-op that would push the rule unpaused and report success.
+
+def pause_manifests(manifests: dict, names: set, *, resumed=frozenset()) -> dict:
+    """Apply stack pause choices without changing the portable manifests.
+
+    Require exactly one generated `spec.paused` line per overridden rule so
+    a malformed manifest cannot silently ignore an operator's choice.
     """
     out = dict(manifests)
-    for name in sorted(names):
+    for name, paused in sorted(_pause_overrides(names, resumed).items()):
         fname = f"{name}.yaml"
         lines = out[fname].decode().split("\n")
         hits = [i for i, line in enumerate(lines)
@@ -396,7 +409,7 @@ def pause_manifests(manifests: dict, names: set) -> dict:
         if len(hits) != 1:
             raise DeployError(f"{fname}: expected one spec.paused line, "
                               f"found {len(hits)}")
-        lines[hits[0]] = "  paused: true"
+        lines[hits[0]] = "  paused: true" if paused else "  paused: false"
         out[fname] = "\n".join(lines).encode()
     return out
 
@@ -420,15 +433,11 @@ def project_all(include_detections: bool = True) -> dict:
 
 
 def readback(context: str, include_detections: bool = True,
-             paused: "set | frozenset" = frozenset()) -> dict:
-    """Compare every generated rule against the stack. Content, not counts.
-
-    A rule in `paused` is expected paused on the stack, so an operator's pause
-    reads as a match and a pause that a later push undid still reads as drift.
-    """
+             paused: "set | frozenset" = frozenset(), *, resumed=frozenset()) -> dict:
+    """Compare every generated rule, with stack pause choices, against live content."""
     projected = project_all(include_detections)
-    for name in paused:
-        projected[name]["spec"]["paused"] = True
+    for name, state in _pause_overrides(paused, resumed).items():
+        projected[name]["spec"]["paused"] = state
 
     live = fetch_live(context, sorted(projected))
     receipt = {"compared": len(projected), "absent": [], "divergent": {},
@@ -468,13 +477,22 @@ def main() -> int:
                              "by default: those are security-content examples an "
                              "operator opts into, not graph2otel health rules, and "
                              "they land in their own folder.")
-    parser.add_argument("--readback-only", action="store_true",
-                        help="compare source against the stack, change nothing")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--readback-only", action="store_true",
+                      help="compare source against the stack, change nothing")
+    mode.add_argument("--validate-only", action="store_true",
+                      help="check manifest and pause choices without contacting the stack")
     parser.add_argument("--pause", default="",
                         help="comma-separated rule names to deploy PAUSED on this "
                              "stack, and to expect paused on read-back. For an "
                              "operator who does not want one of the generated "
                              "rules evaluating; empty pauses none.")
+    parser.add_argument("--activate-teams", action="store_true",
+                        help="activate the seven Teams alert rules on this stack; "
+                             "also expect them active in strict read-back")
+    parser.add_argument("--teams-transition", action="store_true",
+                        help="only update the existing seven Teams rules; "
+                             "still verify all managed rules after the transition")
     args = parser.parse_args()
 
     scope = project_all(args.include_detections)
@@ -487,8 +505,15 @@ def main() -> int:
         parser.error("--pause names rules this deploy does not manage: "
                      + ", ".join(unknown))
 
+    resumed = TEAMS_ALERT_UIDS if args.activate_teams else frozenset()
+    if (args.activate_teams or args.teams_transition) and TEAMS_ALERT_UIDS - scope.keys():
+        parser.error("Teams activation and transition require all seven Teams alert definitions")
+    targets = TEAMS_ALERT_UIDS if args.teams_transition else scope.keys()
+
     try:
-        manifests = pause_manifests(manifests, paused)
+        manifests = pause_manifests(manifests, paused, resumed=resumed)
+        if args.validate_only:
+            return 0
         if not args.readback_only:
             groups = {build_rules.ALERT_GROUP: args.folder_title}
             if args.include_detections:
@@ -507,16 +532,19 @@ def main() -> int:
             # Which rules do not exist yet decides whether the create phase runs
             # at all, so it is read BEFORE any mutation rather than inferred from
             # a failure.
-            existing = set(fetch_live(args.context, sorted(scope)))
-            absent = set(scope) - existing
+            existing = set(fetch_live(args.context, sorted(targets)))
+            absent = set(targets) - existing
+            if args.teams_transition and absent:
+                raise DeployError("refusing a Teams transition with missing live definitions")
 
-            result = push(args.context, folder_uids, manifests, absent)
+            result = push(args.context, folder_uids,
+                          {f"{uid}.yaml": manifests[f"{uid}.yaml"] for uid in targets}, absent)
             print(json.dumps({"push": result, "folders": folder_uids,
                               "created": sorted(absent)}, indent=2))
             if result["failures"]:
                 return 1
 
-        receipt = readback(args.context, args.include_detections, paused)
+        receipt = readback(args.context, args.include_detections, paused, resumed=resumed)
     except DeployError as exc:
         print(json.dumps({"status": "operational_error", "error": str(exc)},
                          indent=2))

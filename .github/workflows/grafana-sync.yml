@@ -29,6 +29,11 @@ on:
       - 'justfile'
       - '.github/workflows/grafana-sync.yml'
   workflow_dispatch:
+    inputs:
+      teams_alerts_transition:
+        description: 'Apply Teams activation or rollback without pruning rules'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -124,6 +129,10 @@ jobs:
       GCX_CONFIG: ${{ github.workspace }}/.gcx-ci.yaml
       GRAFANA_CONTEXT: m7kni
       GRAFANA_STACK_ID: ${{ vars.GRAFANA_STACK_ID }}
+      # This stack can activate exactly the seven reviewed Teams rules without
+      # changing the portable manifests or any other rule's pause state.
+      ACTIVATE_TEAMS: ${{ vars.GRAFANA_ENABLE_TEAMS_ALERTS == 'true' && '1' || '0' }}
+      TEAMS_TRANSITION: ${{ inputs.teams_alerts_transition && '1' || '0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,6 +193,11 @@ jobs:
           echo "resolved ${RULES_FOLDER_TITLE} -> ${uid}"
           echo "RULES_FOLDER_UID=${uid}" >> "$GITHUB_ENV"
 
+      - name: validate stack pause choices before any rule writes
+        env:
+          PAUSED_RULES: ${{ vars.GRAFANA_PAUSED_RULES }}
+        run: just rules-validate m7kni 0 "${PAUSED_RULES}" "${ACTIVATE_TEAMS}"
+
       # The deployable set is the deployer's own, not a filename heuristic: the
       # detection pack is excluded here exactly as `just rules-push` excludes it.
       - name: list the rules this repository deploys
@@ -199,6 +213,7 @@ jobs:
           echo "this repository deploys $(wc -l < expected-rules.txt) rules"
 
       - name: prune rules the repository no longer defines
+        if: ${{ !inputs.teams_alerts_transition }}
         run: |
           python3 scripts/grafana-prune-rules.py \
             --context m7kni \
@@ -213,14 +228,14 @@ jobs:
       - name: push rules
         env:
           PAUSED_RULES: ${{ vars.GRAFANA_PAUSED_RULES }}
-        run: just --yes rules-push m7kni graph2otel 0 "${PAUSED_RULES}"
+        run: just --yes rules-push m7kni graph2otel 0 "${PAUSED_RULES}" "${ACTIVATE_TEAMS}" "${TEAMS_TRANSITION}"
 
       # A push that reports success is not a deployment that matches source — the
       # deployer's read-back compares projected CONTENT field by field.
       - name: prove the stack matches source
         env:
           PAUSED_RULES: ${{ vars.GRAFANA_PAUSED_RULES }}
-        run: just rules-readback m7kni 0 "${PAUSED_RULES}"
+        run: just rules-readback m7kni 0 "${PAUSED_RULES}" "${ACTIVATE_TEAMS}"
 
       - name: remove the credential file
         if: always()

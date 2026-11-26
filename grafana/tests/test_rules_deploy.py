@@ -7,8 +7,10 @@ are recorded on #294.
 
 from __future__ import annotations
 
+import io
 import json
 import os
+from contextlib import redirect_stderr, redirect_stdout
 import sys
 import unittest
 from unittest import mock
@@ -502,6 +504,12 @@ class TestOperatorPausedRules(unittest.TestCase):
     rule as drift."""
 
     TARGET = "g2o-intune-compliance-ratio-low"
+    TEAMS = {
+        "g2o-teams-call-records-stale", "g2o-teams-healthy-call-share-low",
+        "g2o-teams-service-incident-open", "g2o-teams-site-network-noncompliant",
+        "g2o-teams-site-poor-stream-share-high", "g2o-teams-trunk-effectiveness-low",
+        "g2o-teams-trunk-sip-5xx-high",
+    }
 
     def _live_stack(self, paused_live=()):
         out = {}
@@ -554,6 +562,70 @@ class TestOperatorPausedRules(unittest.TestCase):
             receipt = rules_deploy.readback("ctx", paused={self.TARGET})
         self.assertEqual(receipt["status"], "drifted")
         self.assertIn(self.TARGET, receipt["divergent"])
+
+    def test_teams_opt_in_changes_only_the_seven_pause_states(self):
+        manifests = build_rules.render_app_platform()
+        before = rules_deploy.pause_manifests(manifests, {self.TARGET})
+        after = rules_deploy.pause_manifests(manifests, {self.TARGET}, resumed=self.TEAMS)
+        self.assertEqual({name for name in before if before[name] != after[name]},
+                         {f"{uid}.yaml" for uid in self.TEAMS})
+        for uid in self.TEAMS:
+            name = f"{uid}.yaml"
+            self.assertEqual(after[name], before[name].replace(b"\n  paused: true\n", b"\n  paused: false\n", 1))
+
+        live = self._live_stack(paused_live={self.TARGET})
+        args = ["rules_deploy.py", "--context", "synthetic", "--pause", self.TARGET,
+                "--activate-teams", "--readback-only", "--include-detections"]
+        with mock.patch.object(rules_deploy, "fetch_live", lambda context, names: live), \
+                mock.patch.object(sys, "argv", args), redirect_stderr(io.StringIO()):
+            with redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(rules_deploy.main(), 1)
+            self.assertEqual(set(json.loads(out.getvalue())["divergent"]), self.TEAMS)
+            for uid in self.TEAMS:
+                live[uid]["spec"].pop("paused")
+            with redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(rules_deploy.main(), 0)
+            self.assertEqual(json.loads(out.getvalue())["status"], "matched")
+            self.assertEqual(set(rules_deploy.readback("ctx", paused={self.TARGET})["divergent"]), self.TEAMS)
+
+    def test_conflicting_pause_and_activation_choices_fail(self):
+        manifests = build_rules.render_app_platform()
+        uid = next(iter(self.TEAMS))
+        with self.assertRaisesRegex(rules_deploy.DeployError, "cannot both pause and activate"):
+            rules_deploy.pause_manifests(manifests, {uid}, resumed=self.TEAMS)
+
+    def test_cli_transition_only_updates_existing_teams_rules(self):
+        for active in (False, True):
+            with self.subTest(active=active):
+                live = self._live_stack(paused_live={self.TARGET})
+                if active:
+                    for uid in self.TEAMS:
+                        live[uid]["spec"].pop("paused")
+                args = ["rules_deploy.py", "--context", "synthetic", "--folder-uid", "folder",
+                        "--pause", self.TARGET, "--teams-transition"]
+                if active:
+                    args.append("--activate-teams")
+
+                def fetch(context, names):
+                    return {uid: live[uid] for uid in names if uid in live}
+
+                with mock.patch.object(sys, "argv", args), \
+                        mock.patch.object(rules_deploy, "gcx", return_value=[]), \
+                        mock.patch.object(rules_deploy, "fetch_live", side_effect=fetch), \
+                        mock.patch.object(rules_deploy, "push", return_value={"failures": []}) as push, \
+                        redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(rules_deploy.main(), 0)
+                    push.assert_called_once()
+                    _, _, manifests, absent = push.call_args.args
+                    self.assertEqual(set(manifests), {f"{uid}.yaml" for uid in self.TEAMS})
+                    expected = b"\n  paused: false\n" if active else b"\n  paused: true\n"
+                    self.assertTrue(all(expected in data for data in manifests.values()))
+                    self.assertFalse(absent)
+
+                    live.pop(next(iter(self.TEAMS)))
+                    push.reset_mock()
+                    self.assertEqual(rules_deploy.main(), 2)
+                    push.assert_not_called()
 
 
 if __name__ == "__main__":
