@@ -5196,7 +5196,7 @@
         "spec": {
           "id": 43,
           "title": "Site inventory",
-          "description": "One row per tenant and sender-site metric bucket with traffic in range.",
+          "description": "One row per tenant and sender-site metric bucket with traffic in range. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5832,6 +5832,190 @@
                       {
                         "id": "noValue",
                         "value": "Unlabelled"
+                      },
+                      {
+                        "id": "displayName",
+                        "value": "Site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Tenant"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Poor share of classified"
+                    },
+                    "properties": [
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 0.02
+                            },
+                            {
+                              "color": "orange",
+                              "value": 0.05
+                            },
+                            {
+                              "color": "red",
+                              "value": 0.1
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Mean audio RTT"
+                    },
+                    "properties": [
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 0.1
+                            },
+                            {
+                              "color": "red",
+                              "value": 0.5
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Mean audio jitter"
+                    },
+                    "properties": [
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 0.02
+                            },
+                            {
+                              "color": "red",
+                              "value": 0.05
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Mean audio loss"
+                    },
+                    "properties": [
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "yellow",
+                              "value": 0.01
+                            },
+                            {
+                              "color": "red",
+                              "value": 0.05
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "thresholds"
+                        }
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background",
+                          "mode": "basic"
+                        }
                       }
                     ]
                   }
@@ -6015,6 +6199,22 @@
                             "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
+                      },
+                      {
+                        "id": "displayName",
+                        "value": "Caller site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Tenant"
                       }
                     ]
                   }
@@ -6029,7 +6229,7 @@
         "spec": {
           "id": 45,
           "title": "Mapped caller site locations",
-          "description": "Caller site coordinates from the configured mapping, not endpoint locations or preset results.",
+          "description": "Caller site coordinates from the configured mapping, not endpoint locations or preset results. Marker size is the sampled stream count; marker colour is the mean stream round-trip time in the sample. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6053,7 +6253,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | caller_site!~`unmapped|` | caller_site_latitude!=`` | caller_site_longitude!=`` | keep tenant_id, caller_site_latitude, caller_site_longitude, caller_site",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call_stream` | tenant_id=~\"$tenant\" | caller_site!~`unmapped|` | caller_site_latitude!=`` | caller_site_longitude!=`` | keep tenant_id, caller_site_latitude, caller_site_longitude, caller_site, average_rtt_ms",
                         "editorMode": "code",
                         "queryType": "range",
                         "maxLines": 250
@@ -6089,6 +6289,10 @@
                         {
                           "targetField": "caller_site_longitude",
                           "destinationType": "number"
+                        },
+                        {
+                          "targetField": "average_rtt_ms",
+                          "destinationType": "number"
                         }
                       ]
                     }
@@ -6122,6 +6326,12 @@
                             "count",
                             "max"
                           ]
+                        },
+                        "average_rtt_ms": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "mean"
+                          ]
                         }
                       }
                     }
@@ -6134,7 +6344,8 @@
                     "options": {
                       "renameByName": {
                         "Time (count)": "Stream observations (sample)",
-                        "Time (max)": "Latest stream start"
+                        "Time (max)": "Latest stream start",
+                        "average_rtt_ms (mean)": "Mean stream RTT (sample)"
                       },
                       "indexByName": {
                         "tenant_id": 0,
@@ -6171,10 +6382,14 @@
                       "showLegend": false,
                       "style": {
                         "color": {
+                          "field": "Mean stream RTT (sample)",
                           "fixed": "blue"
                         },
                         "size": {
-                          "fixed": 9
+                          "field": "Stream observations (sample)",
+                          "fixed": 9,
+                          "min": 5,
+                          "max": 25
                         },
                         "text": {
                           "field": "caller_site",
@@ -6188,7 +6403,14 @@
                     },
                     "tooltip": true
                   }
-                ]
+                ],
+                "basemap": {
+                  "type": "default",
+                  "name": "Basemap"
+                },
+                "tooltip": {
+                  "mode": "details"
+                }
               },
               "fieldConfig": {
                 "defaults": {
@@ -6197,10 +6419,21 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "text",
+                        "color": "green",
                         "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 100
+                      },
+                      {
+                        "color": "red",
+                        "value": 500
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": [
@@ -6254,6 +6487,18 @@
                             "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Mean stream RTT (sample)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "ms"
                       }
                     ]
                   }
@@ -6437,6 +6682,22 @@
                             "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
+                      },
+                      {
+                        "id": "displayName",
+                        "value": "Callee site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Tenant"
                       }
                     ]
                   }
@@ -17675,6 +17936,490 @@
             }
           }
         }
+      },
+      "panel-3001": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3001,
+          "title": "Sites ranked by mean audio round-trip time",
+          "description": "The ten named sites with the highest mean audio round-trip time over the range. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "(((sum by (tenant_id, site) (((increase(teams_stream_rtt_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_rtt_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_rtt_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_rtt_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_rtt_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]))))) / (sum by (tenant_id, site) (((increase(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])))))) and on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_rtt_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]))))) > 0)) and on (tenant_id, site) (((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]))))) > 0) unless on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]))))) > 0))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "/^Value$/",
+                  "values": true
+                },
+                "displayMode": "basic",
+                "orientation": "horizontal",
+                "showUnfilled": true,
+                "namePlacement": "left",
+                "valueMode": "color"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {},
+                  "noValue": "No data yet. No named site has audio measurements in this selection.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.1
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.5
+                      }
+                    ]
+                  },
+                  "min": 0,
+                  "displayName": "${__data.fields.site}",
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-3002": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3002,
+          "title": "Sites ranked by mean audio jitter",
+          "description": "The ten named sites with the highest mean audio jitter over the range. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "(((sum by (tenant_id, site) (((increase(teams_stream_jitter_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_jitter_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_jitter_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_jitter_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_jitter_seconds_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]))))) / (sum by (tenant_id, site) (((increase(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])))))) and on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_jitter_seconds_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]))))) > 0)) and on (tenant_id, site) (((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]))))) > 0) unless on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]))))) > 0))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "/^Value$/",
+                  "values": true
+                },
+                "displayMode": "basic",
+                "orientation": "horizontal",
+                "showUnfilled": true,
+                "namePlacement": "left",
+                "valueMode": "color"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {},
+                  "noValue": "No data yet. No named site has audio measurements in this selection.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.02
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
+                      }
+                    ]
+                  },
+                  "min": 0,
+                  "displayName": "${__data.fields.site}",
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-3003": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3003,
+          "title": "Sites ranked by mean audio packet loss",
+          "description": "The ten named sites with the highest mean audio packet-loss fraction over the range. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "(((sum by (tenant_id, site) (((increase(teams_stream_packet_loss_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_packet_loss_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_packet_loss_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_packet_loss_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_packet_loss_sum{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]))))) / (sum by (tenant_id, site) (((increase(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])))))) and on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) or 0 * max_over_time(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range])) + ((min_over_time(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]) unless teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"} offset $__range) or 0 * max_over_time(teams_stream_packet_loss_count{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",media=\"audio\",direction=~\"caller_to_callee|callee_to_caller\"}[$__range]))))) > 0)) and on (tenant_id, site) (((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]))))) > 0) unless on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]))))) > 0))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "/^Value$/",
+                  "values": true
+                },
+                "displayMode": "basic",
+                "orientation": "horizontal",
+                "showUnfilled": true,
+                "namePlacement": "left",
+                "valueMode": "color"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "custom": {},
+                  "noValue": "No data yet. No named site has audio measurements in this selection.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.01
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
+                      }
+                    ]
+                  },
+                  "min": 0,
+                  "displayName": "${__data.fields.site}",
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-3004": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3004,
+          "title": "Sites ranked by poor stream share",
+          "description": "The ten named sites with the highest share of poor streams among classified streams over the range. Colour meaning: graph2otel triage bands, not a Microsoft verdict.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "((((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"poor\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"poor\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"poor\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"poor\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"poor\"}[$__range]))))) or on (tenant_id, site) (0 * (sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]))))))) / (sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range])))))) and on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=~\"good|poor\"}[$__range]))))) > 0)) and on (tenant_id, site) (((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\"}[$__range]))))) > 0) unless on (tenant_id, site) ((sum by (tenant_id, site) (((increase(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range])) + ((min_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]) unless teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"} offset $__range) or 0 * max_over_time(teams_streams_total{tenant_id=~\"$tenant\",site!~\"unmapped|overflow|other|\",site=~\"$sites\",stream_health=\"other\"}[$__range]))))) > 0))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "sortBy",
+                  "spec": {
+                    "options": {
+                      "sort": [
+                        {
+                          "field": "Value",
+                          "desc": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "limit",
+                  "spec": {
+                    "options": {
+                      "limitField": 10
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "/^Value$/",
+                  "values": true
+                },
+                "displayMode": "basic",
+                "orientation": "horizontal",
+                "showUnfilled": true,
+                "namePlacement": "left",
+                "valueMode": "color"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "custom": {},
+                  "noValue": "No data yet. No named site has audio measurements in this selection.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.02
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.05
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.1
+                      }
+                    ]
+                  },
+                  "min": 0,
+                  "displayName": "${__data.fields.site}",
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -18177,8 +18922,9 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "",
+                        "title": "Site KPIs",
                         "collapse": false,
+                        "hideHeader": false,
                         "layout": {
                           "kind": "GridLayout",
                           "spec": {
@@ -18286,64 +19032,27 @@
                                     "name": "panel-40"
                                   }
                                 }
-                              },
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Map",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 21,
-                                  "width": 24,
-                                  "height": 5,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-41"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 26,
-                                  "width": 24,
-                                  "height": 5,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-42"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 31,
-                                  "width": 24,
-                                  "height": 9,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-43"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 40,
-                                  "width": 24,
-                                  "height": 9,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-44"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 49,
+                                  "y": 0,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -18351,17 +19060,45 @@
                                     "name": "panel-45"
                                   }
                                 }
-                              },
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Site comparison",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 58,
-                                  "width": 24,
+                                  "y": 0,
+                                  "width": 12,
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-46"
+                                    "name": "panel-3001"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 0,
+                                  "width": 12,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3002"
                                   }
                                 }
                               },
@@ -18369,7 +19106,48 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 67,
+                                  "y": 9,
+                                  "width": 12,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3003"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 9,
+                                  "width": 12,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-3004"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Site trends",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18382,7 +19160,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 67,
+                                  "y": 0,
                                   "width": 12,
                                   "height": 5,
                                   "element": {
@@ -18395,7 +19173,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 75,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18408,7 +19186,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 75,
+                                  "y": 8,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18421,7 +19199,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 83,
+                                  "y": 16,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18434,7 +19212,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 83,
+                                  "y": 16,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -18445,8 +19223,87 @@
                               }
                             ]
                           }
-                        },
-                        "hideHeader": true
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Site tables",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 24,
+                                  "height": 5,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-41"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 5,
+                                  "width": 24,
+                                  "height": 5,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-42"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 10,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-43"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 19,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-44"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 37,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-46"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
                       }
                     }
                   ]
