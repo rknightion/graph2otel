@@ -66,6 +66,20 @@ func TestCheckShapeEmptyIsNotAFailure(t *testing.T) {
 	}
 }
 
+// A null or missing "value" is drift, never an empty collection; only a present [] is.
+func TestCheckShapeNullAndMissingValueAreNotEmpty(t *testing.T) {
+	ep := endpoint(t, "subscribedSkus")
+	for name, body := range map[string]string{"null": `{"value":null}`, "missing": `{}`, "missing with odata": `{"@odata.context":"x"}`} {
+		oc, err := CheckShape(ep, []byte(body))
+		if err == nil || oc == OutcomeEmpty || !strings.Contains(err.Error(), "subscribedSkus") {
+			t.Errorf("%s: got (%q, %v), want a shape error naming the endpoint", name, oc, err)
+		}
+	}
+	if oc, err := CheckShape(ep, []byte(`{"value":[]}`)); err != nil || oc != OutcomeEmpty {
+		t.Errorf("[]: got (%q, %v), want empty", oc, err)
+	}
+}
+
 func TestCheckShapeNullableMayBeNull(t *testing.T) {
 	body := `{"value":[{"id":"a","deviceName":null,"complianceState":"compliant","operatingSystem":"Windows","isEncrypted":true,"lastSyncDateTime":null}]}`
 	if _, err := CheckShape(endpoint(t, "managedDevices"), []byte(body)); err != nil {

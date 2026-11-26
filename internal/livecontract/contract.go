@@ -207,7 +207,7 @@ func CheckShape(ep Endpoint, body []byte) (Outcome, error) {
 	if err := json.Unmarshal(body, &page); err != nil {
 		return "", fmt.Errorf("%s: body is not a JSON object (used by %s)", ep.ID, ep.UsedBy)
 	}
-	if len(page.Value) == 0 {
+	if len(page.Value) == 0 || bytes.Equal(bytes.TrimSpace(page.Value), []byte("null")) {
 		return "", fmt.Errorf("%s: response has no \"value\" array (used by %s)", ep.ID, ep.UsedBy)
 	}
 	var items []map[string]json.RawMessage
