@@ -104,8 +104,8 @@ var ownerTypes = []ownerType{
 // selectQuery requests exactly what the metric and its log twin need: the
 // two credential collections, plus the minimal identity (id/appId/
 // displayName) needed to say WHICH app/service principal a credential
-// belongs to. Nothing wider — see the CLAUDE.md gotcha on the ~150 req/min
-// throttle for $select=keyCredentials on a collection GET.
+// belongs to. See docs/graph-api-gotchas.md for the ~150 req/min throttle
+// for $select=keyCredentials on a collection GET.
 const selectQuery = "$select=id,appId,displayName,keyCredentials,passwordCredentials"
 
 // credential is the subset of keyCredential/passwordCredential this collector

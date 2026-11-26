@@ -13,8 +13,8 @@
 // on this snapshot table it is an 18-digit sequence (live: 639199916335081329)
 // that exceeds float64's exact-integer range, so encoding/json rounds it during
 // decode before the mapper sees it — the same trap DeviceInfo documents. DeviceId
-// is the stable identity; emitting a rounded id as if exact is the wrong-data
-// case CLAUDE.md rejects (#106).
+// is the stable identity; emitting a rounded id as if exact would
+// misrepresent the data (#106).
 package devicenetworkinfo
 
 import (

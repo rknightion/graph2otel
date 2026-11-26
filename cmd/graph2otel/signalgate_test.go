@@ -24,9 +24,9 @@ import (
 // which is what lets it judge every emission from every test — including tests
 // written later by someone who has never heard of #112. But a per-package
 // opt-in is only as good as the enumeration that checks it, and this project
-// has been bitten by exactly that: CLAUDE.md records the #139/#100 incident as
-// "a fourth registration path landed and the coverage test stayed green over a
-// missing collector". A hand-kept list of packages would repeat it.
+// has been bitten by exactly that: a fourth registration path landed and the
+// coverage test stayed green over a missing collector. A hand-kept list of
+// packages would repeat it. See the registration rule in AGENTS.md.
 //
 // So this walks the tree rather than trusting a list. A new collector package
 // fails here until it installs the gate, and cannot ship silently unguarded.

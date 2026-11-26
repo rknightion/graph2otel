@@ -62,8 +62,8 @@
 //
 // AutoForwardingMode ("Automatic") and ActionWhenThresholdReached
 // ("BlockUserForToday") were each observed with exactly ONE live value.
-// Per this project's wirecheck rule (CLAUDE.md, #233/#234), one observed
-// value is not a value set: internal/semconv/attrs_m365_exchangepolicies.go
+// One observed value is not a value set (reference/telemetry-model.md,
+// #233/#234): internal/semconv/attrs_m365_exchangepolicies.go
 // declares no Enum watcher for either. Both are carried as plain strings on
 // the twin.
 //

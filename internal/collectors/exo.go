@@ -51,7 +51,7 @@ type EXOClient interface {
 // until cmd/graph2otel/collectordoc_test.go registrySnapshot() is taught to walk
 // EXOAll() and collectordoc.Rows is given the slice. Adding the path without
 // that walk makes the doc gates pass because they cannot SEE the collector,
-// which is worse than having no gate at all. See CLAUDE.md.
+// which is worse than having no gate at all. See AGENTS.md.
 type EXODeps struct {
 	// Client drives the tenant's Exchange Online admin API. Built once per
 	// tenant by the composition root, and nil when the tenant has configured no

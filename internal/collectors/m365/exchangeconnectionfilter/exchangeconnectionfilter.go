@@ -58,7 +58,7 @@
 // # DirectoryBasedEdgeBlockMode is NOT backed by a wirecheck enum watcher
 //
 // Observed with exactly ONE live value, "Default". Per this project's
-// wirecheck rule (CLAUDE.md, #233/#234), one observed value is not a value
+// wirecheck rule (reference/telemetry-model.md, #233/#234), one observed value is not a value
 // set: internal/semconv/attrs_m365_exchangepolicies.go declares no Enum
 // watcher for it. It is carried as a plain string on the twin.
 //

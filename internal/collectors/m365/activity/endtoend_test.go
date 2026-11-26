@@ -254,8 +254,8 @@ func TestCollectWindowEndToEnd(t *testing.T) {
 //
 // This is the collector's cardinality contract stated positively. Every field
 // here is unbounded — a metric keyed by any of them would be one series per
-// sign-in, the pathological TSDB case CLAUDE.md calls out. The detail belongs in
-// the logs, and this proves that is where all of it goes.
+// sign-in, which the cardinality rule in reference/telemetry-model.md forbids.
+// The detail belongs in the logs, and this proves that is where all of it goes.
 func TestEndToEndEmitsNoMetrics(t *testing.T) {
 	// 50 records with 50 distinct users, IPs and record ids: under any mapper
 	// that leaked per-entity data into a metric label, this is 50+ series.

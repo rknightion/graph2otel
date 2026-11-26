@@ -98,8 +98,8 @@ type agreement struct {
 //
 // That is a real decision, not the #112 framing bug, so do not "fix" it by
 // adding one: the cardinality rule requires a log twin for per-entity data a
-// metric cannot carry (see CLAUDE.md), and every other snapshot collector that
-// was dropping such data got one in #114. This collector is the audited
+// metric cannot carry (see reference/telemetry-model.md). Every other snapshot
+// collector that was dropping such data got one in #114. This collector is the audited
 // exception. "Which users have not accepted the terms of use" is a legal/HR/
 // compliance question — it indicates no compromise, misuse, or active threat —
 // and a per-user twin here would scale with tenant size to answer a question

@@ -56,7 +56,7 @@
 // partners) — the SAME evidence-gated reasoning entra/tenantpolicy's package
 // doc applies to its three empty scoped-policy collections: a mapper written
 // against a shape nobody has observed is a mapper written against
-// documentation, which this project's CLAUDE.md forbids ("mappers are
+// documentation, which this project's AGENTS.md forbids ("mappers are
 // written against live samples, never docs or hand-written fixtures"). This
 // collector therefore emits ONLY entra.cross_tenant_access.partners.total (a
 // plain count, paged via @odata.nextLink so the count is correct even past
@@ -70,9 +70,9 @@
 // access_type is a Graph-supplied enum used as a metric label on
 // entra.cross_tenant_access.access. Only one tenant's one configuration has
 // been observed, and it carries exactly two values (allowed, blocked). Per
-// CLAUDE.md's wire-value-watching section, one observed pair is not a value
-// set — internal/wirecheck deliberately does NOT declare an Enum for this
-// field. A third value appearing on some other tenant would report-only
+// the wire-value watchdog rules in reference/telemetry-model.md, one observed
+// pair is not a value set. internal/wirecheck deliberately does NOT declare
+// an Enum for this field. A third value appearing on some other tenant would report-only
 // bucket to the metric's existing cardinality limiter rather than trip a
 // watchdog invented over an unconfirmed set.
 //

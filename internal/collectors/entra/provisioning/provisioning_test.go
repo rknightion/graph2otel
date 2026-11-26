@@ -29,8 +29,8 @@ import (
 // docs-derived one.
 //
 // Every value is as the wire sent it, including the real group names, job id,
-// service principal GUIDs and tenantId. Nothing is scrubbed: per CLAUDE.md's
-// cardinality section this project exports per-entity detail to a trusted sink
+// service principal GUIDs and tenantId. Nothing is scrubbed: as described in
+// reference/telemetry-model.md, this project exports per-entity detail to a trusted sink
 // by design, and a "tidied" fixture is a docs-derived fixture with extra steps.
 //
 // Two wire facts this record pins, both contradicting the Graph resource doc

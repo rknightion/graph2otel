@@ -54,7 +54,7 @@ type HuntClient interface {
 // HuntAll() and collectordoc.Rows is given the slice. Adding the path without
 // that walk makes the doc gates pass because they cannot SEE the collector,
 // which is worse than having no gate at all. Both were done in the same commit
-// that added this file. See CLAUDE.md.
+// that added this file. See AGENTS.md.
 type HuntDeps struct {
 	// Client drives the tenant's advanced-hunting queries. Built once per tenant
 	// by the composition root, and nil when the tenant has not enabled hunting —

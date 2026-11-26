@@ -6,7 +6,7 @@
 //
 // Essentially every load-bearing detail on this project's path was established
 // by MEASURING a live tenant, because Microsoft's documentation was wrong about
-// it (CLAUDE.md's "wire over docs" rule). That leaves a standing exposure:
+// it (AGENTS.md's "wire over docs" rule). That leaves a standing exposure:
 // a measurement is a fact about one tenant at one moment, and Microsoft can add
 // an enum member, rename a field, or change a filter's behavior at any time.
 // Without something watching, such a change is SILENT — the collector keeps
@@ -22,8 +22,8 @@
 //
 // # The shape: bounded counter, unbounded detail in the log
 //
-// Two outputs per finding, which is CLAUDE.md's cardinality rule turned on
-// graph2otel's own telemetry:
+// Two outputs per finding, applying the cardinality rule in
+// reference/telemetry-model.md to graph2otel's own telemetry:
 //
 //   - a COUNTER, MetricUnexpected, labeled {collector, field, kind}. Every label
 //     is a string from graph2otel's own source, so the series count is fixed by

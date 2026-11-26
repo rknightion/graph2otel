@@ -21,7 +21,7 @@
 //     detail. Every install is emitted, not only the end-of-life ones (#114): the
 //     installs gauge buckets every status, so the entities behind every bucket
 //     must be reachable. This is the SIEM-feed half — per-entity detail in logs is
-//     the point (CLAUDE.md) — and it complements intune.detected_apps, which
+//     the point (AGENTS.md) — and it complements intune.detected_apps, which
 //     catalogs apps but carries no CPE, no EOS status, and only Intune-managed
 //     devices (#249 keeps both).
 //

@@ -212,7 +212,7 @@ func (c *Client) listContentWindow(ctx context.Context, ct ContentType, start, e
 // # Two traps live in these records
 //
 // SENSITIVE VALUES. Records carry ModifiedProperties entries with OldValue and
-// NewValue. CLAUDE.md's one genuine content exclusion is not negotiable: a
+// NewValue. Under the secret exclusion in reference/telemetry-model.md, a
 // mapper emits the NAMES of changed properties and NEVER their old/new VALUES,
 // which can carry credentials and certificates. Because this function hands back
 // the raw record, that obligation lands entirely on the mapper —

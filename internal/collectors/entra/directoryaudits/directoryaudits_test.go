@@ -208,8 +208,8 @@ const liveAppRoleGrant = `{
 // liveAddServicePrincipal is a minimized-but-wire-shaped "Add service principal"
 // record whose modifiedProperties include a `Credential` property, whose
 // newValue on the real wire is a JSON blob describing the credential
-// (`[{"CredentialType":2,...}]`, live-observed 2026-07-19). CLAUDE.md's one
-// content exclusion says the mapper emits the NAMES of changed properties but
+// (`[{"CredentialType":2,...}]`, live-observed 2026-07-19). Under the secret
+// exclusion in reference/telemetry-model.md, the mapper emits property NAMES but
 // never a `Credential` VALUE (the value can BE the credential). This fixture
 // exists so a test can prove "Credential" appears in modified_property_names
 // while its value appears in no attribute.
@@ -452,8 +452,8 @@ func TestMapDirectoryAuditExtractsGrantedScope(t *testing.T) {
 	}
 }
 
-// TestMapDirectoryAuditNeverEmitsCredentialValue enforces CLAUDE.md's one
-// content exclusion (#190 secret boundary): the mapper emits the NAME of a
+// TestMapDirectoryAuditNeverEmitsCredentialValue enforces the secret exclusion
+// in reference/telemetry-model.md (#190): the mapper emits the NAME of a
 // changed Credential property but NEVER its value — the value can BE the
 // credential. So "Credential" appears in modified_property_names, and the secret
 // key material never appears in any attribute.

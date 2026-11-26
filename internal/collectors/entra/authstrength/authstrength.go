@@ -63,8 +63,8 @@
 // would ordinarily be exactly what internal/wirecheck watches for a new
 // member. They are deliberately left unwatched here because only one value
 // of each has ever been observed live (policyType="builtIn",
-// requirementsSatisfied="mfa") — CLAUDE.md's rule is explicit that one
-// observed value is not a value set, and a watchdog that fires on the first
+// requirementsSatisfied="mfa"). One observed value is not a value set (see
+// reference/telemetry-model.md), and a watchdog that fires on the first
 // legitimate second value (a tenant's own custom strength policy, or a
 // future "none" requirement level) is worse than no watchdog at all. Add
 // wirecheck coverage once a second value has been seen on the wire, not

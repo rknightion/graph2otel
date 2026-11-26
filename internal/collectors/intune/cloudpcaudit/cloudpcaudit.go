@@ -37,7 +37,7 @@
 // envelope `time`, which is Azure's export clock ~1s later (live-measured
 // 2026-07-19, the same envelope-vs-event skew every category shows — #135). No
 // fallback: a record with no parseable activityDateTime is dropped rather than
-// mis-dated (CLAUDE.md emitter rule).
+// mis-dated (AGENTS.md emitter rule).
 package cloudpcaudit
 
 import (

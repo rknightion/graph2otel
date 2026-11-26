@@ -29,7 +29,7 @@ import (
 // invisible to every collectordoc gate until cmd/graph2otel/collectordoc_test.go
 // registrySnapshot() is taught to walk MDCAAll(). Adding this path without that
 // walk makes the doc gates pass because they cannot SEE the collector, which is
-// worse than no gate. See collectors/conflicts.go and CLAUDE.md.
+// worse than no gate. See AGENTS.md.
 type MDCADeps struct {
 	// Client drives the tenant's MDCA portal API. Built once per tenant by the
 	// composition root from the tenant's mdca.portal_url + token_file, and nil

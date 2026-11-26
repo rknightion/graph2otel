@@ -35,7 +35,7 @@
 // domains. Microsoft's own Get-AcceptedDomain reference additionally documents
 // "InternalRelay" (and "Mixed"), but neither has been observed on the wire
 // here — that is docs-only evidence, not live-measured. Per this project's
-// wirecheck rule (CLAUDE.md, #233/#234), one observed value is not a value
+// wirecheck rule (reference/telemetry-model.md, #233/#234), one observed value is not a value
 // set: this collector deliberately declares NO internal/wirecheck enum watcher
 // for DomainType. A watcher built off a single observed value would fire the
 // moment a tenant's second, entirely legitimate domain type showed up — worse

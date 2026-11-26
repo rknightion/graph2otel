@@ -1,7 +1,7 @@
 # PII & cardinality audit (pre-1.0 release gate)
 
 Audits every metric label set and every log attribute emitted by every shipped
-collector against the cardinality boundary rule in `CLAUDE.md` and `SECURITY.md`,
+collector against the [cardinality rule](../reference/telemetry-model.md#cardinality-metrics-carry-aggregates-logs-carry-entities) and [SECURITY.md](../SECURITY.md),
 and reviews the Graph API permission scopes each collector requests. Tracks issue #33;
 a completed pass is a prerequisite for the v1.0.0 tag (#35).
 

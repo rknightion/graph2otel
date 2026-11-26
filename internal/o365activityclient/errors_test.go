@@ -29,10 +29,9 @@ func TestParseAPIErrorDocumentedCode(t *testing.T) {
 	}
 }
 
-// TestErrorPredicatesMatchTheirOwnCodeOnly is the guard against the failure mode
-// CLAUDE.md calls out: a collector must recognize a SPECIFIC documented
-// signature and skip on it, never blanket-swallow every error sharing its HTTP
-// status. Each predicate must fire on its own code and on nothing else.
+// TestErrorPredicatesMatchTheirOwnCodeOnly checks that each predicate matches
+// only its documented error code. Matching by HTTP status alone would hide
+// other errors returning the same status.
 func TestErrorPredicatesMatchTheirOwnCodeOnly(t *testing.T) {
 	predicates := map[string]struct {
 		code string

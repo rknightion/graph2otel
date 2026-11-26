@@ -91,8 +91,8 @@
 // which is ordinarily exactly what internal/wirecheck watches for a new
 // member. It is deliberately left unwatched here: only two of the
 // documented values (AzureADMyOrg, AzureADMultipleOrgs) have ever been
-// observed, across two rows, on one tenant. CLAUDE.md's rule is explicit
-// that one tenant's observed values are not a value set; add wirecheck
+// observed, across two rows, on one tenant. As reference/telemetry-model.md
+// explains, observed values are not a value set; add wirecheck
 // coverage once a second tenant or a third value has been seen live, not
 // before.
 package agentgovernance

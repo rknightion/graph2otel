@@ -11,7 +11,7 @@ image:
 imagePullSecrets: []
 
 # -- Replica count. Keep at 1 — graph2otel is a single-instance poller with no
-# leader election or HA in v1 (see CLAUDE.md Architecture: none of the polled
+# leader election or HA in v1 (see AGENTS.md Architecture: none of the polled
 # Graph endpoints support consumer-group/delta semantics that would make
 # multi-replica coordination pay for itself). Scaling this up double-polls
 # every tenant and double-emits every metric and log.

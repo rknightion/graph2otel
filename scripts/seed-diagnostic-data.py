@@ -6,7 +6,7 @@ WHY THIS EXISTS
     On a small tenant many diagnostic categories are near-empty: the events they carry
     (Defender alerts, email flow, ID-Protection risk, Windows registry writes, ...) just
     don't happen often. But collector mappers on this project are written against LIVE
-    samples, never docs or hand-written fixtures (see CLAUDE.md). This tool fires the
+    samples, never docs or hand-written fixtures (see AGENTS.md). This tool fires the
     safe, repeatable actions that make those events happen, so a container that has gone
     stale (retention is ~2 days) can be re-lit on demand before you sit down to build or
     debug its collector. Pair it with storage-report.py to confirm the bytes land.

@@ -347,7 +347,7 @@ type InvokeResult struct {
 // An absent, null or empty "value" returns an EMPTY SLICE AND A NIL ERROR, never
 // an error. An empty result is the steady state — a healthy tenant has nothing
 // in quarantine — so treating absence as failure would make a collector alert
-// forever on a working system. CLAUDE.md's "a green tick is not evidence of
+// forever on a working system. AGENTS.md's "a green tick is not evidence of
 // data" rule cuts the other way here: the emptiness is real, and it is the
 // mapper's job to be written against live samples so a mapping bug is not hidden
 // behind it.

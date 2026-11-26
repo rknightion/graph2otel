@@ -11,8 +11,9 @@ import (
 // blobUserRiskEvent is a UserRiskEvents diagnostic-settings envelope captured
 // live off m7kni (2026-07-18, #135) — the #129 synthesized detection. The inner
 // `properties` object is the riskDetection resource mapRiskDetection already
-// reads; it additionally carries `riskType` (blob-only, a duplicate of
-// riskEventType — CLAUDE.md), which must not perturb the mapping.
+// reads; it additionally carries `riskType` (blob-only; see
+// reference/telemetry-model.md), a duplicate of riskEventType that must not
+// perturb the mapping.
 const blobUserRiskEvent = `{
   "time": "7/18/2026 2:03:03 PM",
   "category": "UserRiskEvents",
@@ -90,7 +91,7 @@ func TestMapBlobRiskDetectionReusesMapperAndBindsTimestamp(t *testing.T) {
 }
 
 // A record with no parseable detectedDateTime is dropped, never stamped with
-// arrival time (CLAUDE.md: misdated is wrong, only wrong justifies a drop).
+// arrival time (AGENTS.md: misdated is wrong, only wrong justifies a drop).
 func TestMapBlobRiskDetectionDropsUndatedRecord(t *testing.T) {
 	rec := decodeRec(t, `{"category":"UserRiskEvents","properties":{"id":"x","riskEventType":"none"}}`)
 	if _, ok := mapBlobRiskDetection(rec); ok {

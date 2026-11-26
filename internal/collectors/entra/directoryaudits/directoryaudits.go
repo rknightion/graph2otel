@@ -147,9 +147,9 @@ func mapDirectoryAudit(rec map[string]any) (string, telemetry.Event) {
 				}
 				// Emit the NAMES of every changed property always; emit a VALUE
 				// only for the two safe, bounded, actionable fields. This is
-				// deliberately NOT a general newValue dump: CLAUDE.md's one
-				// content exclusion is that a `Credential` newValue can BE the
-				// credential, so arbitrary values are never emitted (#190).
+				// deliberately NOT a general newValue dump: a `Credential`
+				// newValue can BE the credential. See the secret exclusion in
+				// reference/telemetry-model.md and #190.
 				switch dn {
 				case "Role.DisplayName":
 					if _, set := attrs[semconv.AttrRoleName]; !set {

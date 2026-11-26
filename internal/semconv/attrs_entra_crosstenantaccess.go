@@ -21,8 +21,8 @@ package semconv
 //
 // `access_type` is a Graph-supplied enum value (allowed/blocked observed
 // live) used as a metric label on entra.cross_tenant_access.access. Per
-// CLAUDE.md's wire-value-watching section, one tenant's one observed value
-// pair is not a value set: the collector package doc records the decision to
+// the wire-value watchdog in reference/telemetry-model.md, one tenant's
+// observed pair is not a value set: the collector package doc records the decision to
 // leave it explicitly UNWATCHED by internal/wirecheck rather than invent a
 // watchdog over an unconfirmed enum.
 //

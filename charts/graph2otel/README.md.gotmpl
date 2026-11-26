@@ -170,8 +170,8 @@ disable both the admin server and the probes.
 `replicaCount` is fixed at `1` by design (the schema rejects any other value):
 graph2otel is a single-instance poller with no leader election in v1 (none of
 the polled Graph endpoints support consumer-group/delta semantics that would
-make multi-replica coordination worthwhile — see the app repo's CLAUDE.md). Do
-not raise it or add a StatefulSet/HA topology; doing so double-polls every
+make multi-replica coordination worthwhile). See [the app's architecture](../../AGENTS.md#architecture-the-seams).
+Do not raise it or add a StatefulSet/HA topology; doing so double-polls every
 tenant and double-emits every metric and log. `strategy.type: Recreate`
 reflects this — a rolling update briefly runs zero replicas rather than ever
 running two.

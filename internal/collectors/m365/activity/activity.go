@@ -81,8 +81,8 @@
 // Cardinality note (INVERTED from the metric collectors): these are LOGS, so
 // per-entity detail — the record id, UPN, client IP, object id, actor ids —
 // belongs here as structured log attributes. That same data must NEVER become a
-// metric label. See CLAUDE.md: the boundary is a data-modeling rule, not a
-// privacy control.
+// metric label. See reference/telemetry-model.md for why this bounds
+// cardinality rather than acting as a privacy control.
 //
 // # Secret redaction — the ONE genuine content exclusion
 //
@@ -94,8 +94,8 @@
 // ExtendedProperties[].Value IS emitted, and the earlier decision to withhold it
 // was wrong. It was withheld on a SHAPE argument — the value is a JSON-encoded
 // string (#100) of unbounded, workload-defined form — but "awkward to model" is
-// not "unsafe to ship", and CLAUDE.md is explicit that reading the exclusion as
-// general caution is what produced #110 and #111. What these values actually
+// not "unsafe to ship". Applying the secret exclusion as a general caution
+// produced #110 and #111 (see reference/telemetry-model.md). What these values actually
 // carry, live: additionalDetails ({"User-Agent":…,"AppId":…}),
 // extendedAuditEventCategory ("ServicePrincipal"), and LoginError
 // ("…;PP_E_BAD_PASSWORD;The entered and stored passwords do not match."). For a

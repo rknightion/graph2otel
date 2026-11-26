@@ -63,8 +63,8 @@
 // # Record content is SENSITIVE — read before mapping
 //
 // FetchContent returns raw records that carry ModifiedProperties with OldValue
-// and NewValue. CLAUDE.md's one genuine content exclusion applies: emit the
-// NAMES of changed properties, NEVER their old/new VALUES, which can carry
+// and NewValue. See the secret exclusion in reference/telemetry-model.md:
+// emit property NAMES, never their old/new VALUES, which can carry
 // credentials and certificates. This package deliberately does not map records
 // — that belongs to a collector — so the obligation lands on the mapper. Follow
 // intune/auditevents, which already models this correctly.

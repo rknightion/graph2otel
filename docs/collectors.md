@@ -372,7 +372,7 @@ query, so each event type needs its own poller. Each owns a distinct `Checkpoint
 (`/auditLogs/signIns#<eventType>`) — without that they would share one checkpoint namespace and
 dedupe each other's events away. The `beta` gate on three of them is about the `signInEventTypes`
 filter, which returns HTTP 400 on v1.0; only the unfiltered interactive stream is v1.0 and
-default-on. See `CLAUDE.md` for the verified live behavior.
+default-on. See [the live sign-in measurements](graph-api-gotchas.md#sign-in-logs).
 
 ### Blob collectors read Azure Storage, not Graph
 

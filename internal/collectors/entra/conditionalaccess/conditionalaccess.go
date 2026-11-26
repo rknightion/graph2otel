@@ -18,7 +18,7 @@
 // entra.conditional_access_policy and entra.named_location — alongside the
 // gauges above, which stay exactly as they are. This is the same rule as
 // entra/risk: "not a metric label" means "log twin", never dropped (see
-// CLAUDE.md). Per-policy configuration (conditions, grant/session controls)
+// reference/telemetry-model.md). Per-policy configuration (conditions, grant/session controls)
 // and per-location detail (CIDR ranges, countries) were discarded before
 // #318; they now land as typed fixed attributes and arrays on the ONE record
 // for that entity — never a per-target or per-condition child record, which
@@ -64,7 +64,7 @@ const (
 // The two log EventNames carrying the per-entity detail the gauges above
 // cannot — one record per returned policy / named location per cycle,
 // added alongside the gauges by #318 (never replacing them; see the package
-// doc and CLAUDE.md's "metrics carry aggregates, logs carry entities" rule).
+// doc and the cardinality rule in reference/telemetry-model.md).
 const (
 	eventPolicy        = "entra.conditional_access_policy"
 	eventNamedLocation = "entra.named_location"
@@ -112,8 +112,8 @@ type locKey struct {
 // conditionalAccessPolicy. State alone feeds the bounded aggregate gauge
 // (policyPoints); everything else here is per-policy detail that was
 // discarded before #318 and now feeds ONLY the entra.conditional_access_policy
-// log twin (policyLogEvent) — never a metric label, per CLAUDE.md's
-// "metrics carry aggregates, logs carry entities" rule.
+// log twin (policyLogEvent), never a metric label. See the cardinality rule
+// in reference/telemetry-model.md.
 type conditionalAccessPolicy struct {
 	ID               string        `json:"id"`
 	DisplayName      string        `json:"displayName"`
