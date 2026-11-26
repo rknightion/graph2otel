@@ -886,6 +886,67 @@ class TestExportThrottleExhaustedFiresOnFirstEvent(unittest.TestCase):
                                  capture_output=True, text=True)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def _eval_exhausted(self, values, eval_times):
+        """Run the live rule expression over one input series; return, per
+        eval time, the value promtool reports (None when no sample)."""
+        rule = next(r for r in build_rules.RULES if r["uid"] == "g2o-export-throttle-exhausted")
+        expr = rule["data"][0]["model"]["expr"]
+        metric = build_rules._m("graph2otel.export.throttle_exhausted")
+        labels = 'tenant_id="fixture-tenant",report_name="FixtureReport"'
+        out = {}
+        for at, want in eval_times:
+            test = {
+                "evaluation_interval": "1m",
+                "tests": [{
+                    "interval": "1m",
+                    "input_series": [{"series": f"{metric}{{{labels}}}", "values": values}],
+                    "promql_expr_test": [{
+                        "expr": f"round({expr})", "eval_time": at,
+                        "exp_samples": [{"labels": f"{{{labels}}}", "value": want}],
+                    }],
+                }],
+            }
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, "rule_test.yaml")
+                with open(path, "w", encoding="utf-8") as fh:
+                    json.dump(test, fh)
+                run = subprocess.run(["promtool", "test", "rules", path],
+                                     capture_output=True, text=True)
+            out[at] = (run.returncode, run.stdout + run.stderr)
+        return out
+
+    @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
+    def test_restart_baselined_at_zero_then_repeat_fires(self):
+        # #711: the exporter now publishes the series at 0 when an export call
+        # starts, so the process after a restart goes 0 -> 1. One event, then a
+        # restart (3 absent minutes), a 0 baseline, then a repeat exhaustion.
+        # Minutes: absent 0-5, first event (1) from 6, restart gap 27-30, new
+        # process baseline 0 from 31, repeat event (1) from 37.
+        values = "_x5 1x20 _x3 0x5 1x20"
+        res = self._eval_exhausted(values, [("20m", 1), ("34m", 0), ("38m", 1)])
+        for at, (code, out) in res.items():
+            self.assertEqual(code, 0, f"{at}: {out}")
+
+    @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
+    def test_steady_one_stops_firing_after_the_window(self):
+        # One event, then a flat 1 with no further event: fires inside the 30m
+        # window, silent once the window has passed.
+        values = "_x5 0x5 1x80"
+        res = self._eval_exhausted(values, [("20m", 1), ("80m", 0)])  # event at 11m
+        for at, (code, out) in res.items():
+            self.assertEqual(code, 0, f"{at}: {out}")
+
+    @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
+    def test_one_to_one_across_a_restart_is_invisible_to_the_rule(self):
+        # The limit that motivates the source-side baseline: 1 -> 1 across a
+        # restart with identical labels holds no reset, so no expression over
+        # the samples can tell it from steady state. Pinned so nobody "fixes"
+        # the rule and believes it.
+        values = "1x40 _x3 1x40"
+        res = self._eval_exhausted(values, [("60m", 0)])
+        for at, (code, out) in res.items():
+            self.assertEqual(code, 0, f"{at}: {out}")
+
     def test_exhausted_rule_counts_a_series_born_at_one_without_promtool(self):
         # CI has no promtool, so the test above is skipped there. Assert the shape that
         # makes a newly born series count: plain increase() reads a counter born at 1 as 0.

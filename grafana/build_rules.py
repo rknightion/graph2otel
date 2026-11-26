@@ -661,7 +661,9 @@ RULES = [
         "count: they are normal and the adaptive limiter lowers its rate on them "
         "(graph2otel_throttle_effective_rate_per_minute). The expression keeps the first "
         "value of a counter series born inside the window, so the first exhaustion after "
-        "a restart still fires. This is the impact signal "
+        "a restart still fires, and the exporter publishes the series at 0 when an "
+        "export call starts so a repeat after a restart is a 0 to 1 step (a restart "
+        "from 1 to 1 holds no reset and cannot be seen from samples). This is the impact signal "
         "for the intune-export workload, which g2o-throttle-saturation excludes.",
         False,
     ),

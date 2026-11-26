@@ -564,6 +564,11 @@ this way, never a 429 the retry absorbed.
 
 **False positives:** none expected. A single export is retried at the next tick.
 
+**Restart:** the exporter publishes the counter at 0 when an export call starts,
+so the first exhaustion after a restart is a 0 to 1 step that `increase()`
+counts. Without that baseline a restart from 1 to 1 with the same labels holds no
+reset and no expression can see it (#711).
+
 **Remediation:** read `graph2otel_throttle_effective_rate_per_minute`. The limiter
 halves on a 429 down to a floor of 4 a minute and recovers 2 a minute per 50
 successful requests with no 429 (idle time does not recover it), so a rate pinned at the floor means Microsoft's real ceiling is lower
