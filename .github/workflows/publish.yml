@@ -44,6 +44,10 @@ jobs:
       dockerfile: Dockerfile
       # The licence label comes from the Dockerfile LABEL at the built tag, not the repo API.
       image-licenses: dockerfile
+      # RCs (auto-rc) publish only their version tags. :main belongs to the edge build of the
+      # newest commit; an RC for an older commit that finishes later must not move it back,
+      # because camden follows :main automatically.
+      publish-branch-tags-on-prerelease: false
       helm-chart-path: charts/graph2otel
 
   # go-licenses third-party notices (Go-specific; migrates to the shared binaries
