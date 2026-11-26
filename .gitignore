@@ -62,3 +62,6 @@ codex/
 
 # loop-pi (pi-subagents writes .pi/subagents/)
 .pi/
+
+# Local dashboard renders for demos and videos, never committed
+/screenshots/
