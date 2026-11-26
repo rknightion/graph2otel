@@ -103,12 +103,13 @@ class TeamsDashboardTests(unittest.TestCase):
             "Service health": "service-health",
             "Collector health": "collector-health",
         }
-        self.assertCountEqual([link["title"] for link in overview["links"]], routes.keys())
+        links = [link for link in overview["links"] if urlsplit(link["url"]).path == "/d/graph2otel-teams"]
+        self.assertCountEqual([link["title"] for link in links], routes.keys())
         scope = {"var-tenant": ["tenant-a", "tenant-b"], "var-datasource": ["example-prom"],
                  "var-loki_datasource": ["example-logs"]}
         variables = "&".join(f"{key}={value}" for key, values in scope.items() for value in values)
         substitutions = {"__from": "100", "__to": "200", "__all_variables": variables}
-        for link in overview["links"]:
+        for link in links:
             with self.subTest(destination=link["title"]):
                 self.assertIn(link["title"], tabs)
                 url = re.sub(r"\$\{([^}]+)\}", lambda m: substitutions[m[1]], link["url"])
@@ -117,6 +118,65 @@ class TeamsDashboardTests(unittest.TestCase):
                 self.assertEqual(parse_qs(parts.query), {
                     "dtab": [routes[link["title"]]], "from": ["100"], "to": ["200"], **scope,
                 })
+
+    def test_cross_dashboard_routes_keep_only_shared_scope(self):
+        graph = json.loads((DASHBOARDS / "graph2otel.json").read_text())
+        for source, dest in ((graph, self.manifest), (self.manifest, graph)):
+            uid = dest["metadata"]["name"]
+            with self.subTest(destination=uid):
+                overview = source["spec"]["layout"]["spec"]["tabs"][0]
+                elements = v2.placed_element_names({"spec": {"layout": {"spec": {"tabs": [overview]}}}})
+                links = [link for name in elements for link in source["spec"]["elements"][name]["spec"]["links"]
+                         if urlsplit(link["url"]).path == f"/d/{uid}"]
+                self.assertEqual(len(links), 1, "Overview must offer a route to the other dashboard")
+                query = self.scoped_route(links[0]["url"])[1]
+                self.assertEqual(query, {"dtab": ["overview"], **self.selected_scope})
+                declared = {var["spec"]["name"] for var in dest["spec"]["variables"]}
+                self.assertLessEqual({key[4:] for key in query if key.startswith("var-")}, declared)
+                self.assertEqual(dest["spec"]["layout"]["spec"]["tabs"][0]["spec"]["title"], "Overview")
+
+    selected_scope = {"from": ["100"], "to": ["200"], "var-tenant": ["tenant-a", "tenant-b"],
+                      "var-datasource": ["example-prom"], "var-loki_datasource": ["example-logs"]}
+
+    @staticmethod
+    def scoped_route(url):
+        substitutions = {"__from": "100", "__to": "200", "tenant:queryparam": "var-tenant=tenant-a&var-tenant=tenant-b",
+                         "datasource:queryparam": "var-datasource=example-prom",
+                         "loki_datasource:queryparam": "var-loki_datasource=example-logs"}
+        parts = urlsplit(re.sub(r"\$\{([^}]+)\}", lambda match: substitutions[match[1]], url))
+        return parts.path, parse_qs(parts.query)
+
+    def test_effectiveness_panel_opens_placed_same_poll_evidence(self):
+        panels = self.panels_by_tab()["PSTN and Direct Routing"]
+        chart = next(panel for panel in panels if panel["title"] == "Latest exported Direct Routing effectiveness")
+        evidence = next(panel for panel in panels if panel["title"] == "Direct Routing effectiveness counts by poll")
+        self.assertIn(("/d/graph2otel-teams", {"dtab": ["pstn-and-direct-routing"],
+                       "viewPanel": [str(evidence["id"])], **self.selected_scope}),
+                      [self.scoped_route(link["url"]) for link in chart["links"]])
+
+    def test_phone_assignment_legend_distinguishes_tenants_after_type(self):
+        panel = next(panel for panel in self.panels_by_tab()["Phone inventory"]
+                     if panel["title"] == "Phone numbers over time by capability and assignment")
+        [target] = panel["data"]["spec"]["queries"]
+        query = target["spec"]["query"]["spec"]
+        self.assertIn('tenant_id=~"$tenant"', query["expr"])
+        labels = {"assignment_status": "assigned", "number_type": "directRouting", "capability": "voice"}
+        legends = [re.sub(r"\{\{(\w+)\}\}", lambda match: ({**labels, "tenant_id": tenant})[match[1]],
+                          query["legendFormat"]) for tenant in ("tenant-a", "tenant-b")]
+        self.assertEqual(legends, [f"assigned · directRouting · voice · {tenant}" for tenant in ("tenant-a", "tenant-b")])
+
+    def test_usage_refresh_dates_link_to_documented_source_clock(self):
+        panels = self.panels_by_tab()["Usage"]
+        docs = ("https://github.com/rknightion/graph2otel/blob/main/docs/signals.md"
+                "#teams-usage-reports-snapshots-not-activity-events")
+        for period in (7, 30):
+            with self.subTest(period=period):
+                panel = next(panel for panel in panels if panel["title"] == f"D{period} report refresh date")
+                self.assertIn(docs, [link["url"] for link in panel["links"]])
+        guide = next(panel for panel in panels if panel["title"] == "Reading usage")
+        self.assertIn(f"]({docs})", guide["vizConfig"]["spec"]["options"]["content"])
+        signals = (DASHBOARDS.parent / "docs" / "signals.md").read_text()
+        self.assertIn("## Teams usage reports: snapshots, not activity events", signals)
 
     def test_panel_navigation_uses_the_routes_grafana_writes(self):
         tabs = self.panels_by_tab()
@@ -190,7 +250,10 @@ class TeamsDashboardTests(unittest.TestCase):
                         event = match[1]
                         self.assertTrue(event.startswith("teams.") or event in {
                             "m365.service_health_issue", "m365.teams.phone_number", "m365.teams.user_configuration",
-                            "m365.teams.phone_inventory_snapshot", "m365.teams.sip_device", "m365.teams_app"})
+                            "m365.teams.phone_inventory_snapshot", "m365.teams.sip_device", "m365.teams_app",
+                            "graph2otel.startup"})
+                        if event == "graph2otel.startup":
+                            self.assertEqual(tab, "Collector health")
                         if event == "m365.teams_app":
                             self.assertEqual(tab, "Usage")
                         if event in {"m365.teams.phone_inventory_snapshot", "m365.teams.sip_device"}:

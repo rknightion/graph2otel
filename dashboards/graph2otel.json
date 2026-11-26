@@ -44832,7 +44832,12 @@
           "id": 548,
           "title": "Read this before writing your own query",
           "description": "",
-          "links": [],
+          "links": [
+            {
+              "title": "Open Teams dashboard",
+              "url": "/d/graph2otel-teams?dtab=overview&from=${__from}&to=${__to}&${tenant:queryparam}&${datasource:queryparam}&${loki_datasource:queryparam}"
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {

@@ -31,6 +31,10 @@ ROW_NOTE = f" Up to {RECORD_LIMIT} recent records in the selected time range, no
 SLOT = "15m"
 SLOT_NOTE = f"Counted per interval of at least {SLOT}, by processing time."
 STAT_NO_VALUE = "No data yet. See panel info."
+_SCOPED_RANGE = ("from=${__from}&to=${__to}&${tenant:queryparam}"
+                 "&${datasource:queryparam}&${loki_datasource:queryparam}")
+_USAGE_SOURCE_DATE = ("https://github.com/rknightion/graph2otel/blob/main/docs/signals.md"
+                      "#teams-usage-reports-snapshots-not-activity-events")
 
 
 class TeamsBuilder(Builder):
@@ -288,6 +292,8 @@ def overview(b):
                        "&from=${__from}&to=${__to}&${__all_variables}"}
                       for tab in ("Call quality", "Sites and network", "Calls", "PSTN and Direct Routing",
                                   "Service health", "Collector health")]
+    intro["links"].append({"title": "Open main graph2otel dashboard",
+                           "url": f"/d/graph2otel?dtab=overview&{_SCOPED_RANGE}"})
     _call_count_panels(b)
     increase = {"op": "increase", "window": "$__range"}
     good = _agg(b, "teams.calls", match='call_health="good"', **increase)
@@ -965,11 +971,14 @@ def phone(b):
                      "media. " + _DIRECT_ROUTING_CLASSIFICATION)
     trunk["fieldConfig"]["defaults"].update(unit="percentunit", min=0, max=1)
     trunk["fieldConfig"]["defaults"]["custom"].update(spanNulls=False, showPoints="always")
-    b.records("teams.direct_routing_poll", "Direct Routing effectiveness counts by poll", (
+    evidence = b.records("teams.direct_routing_poll", "Direct Routing effectiveness counts by poll", (
         "trunk_fqdn", "effective_attempts", "poll_attempts", "source_success_sip_4xx",
     ), desc="Each dated row is a successful poll with new attempts for this trunk. Effective is the numerator, "
             "poll attempts is the denominator, and source success with SIP 4xx is a subset of effective. "
             "Rows are poll-time evidence, not call start times or a range-wide rate.")
+    trunk["links"] = [{"title": "See same-poll counts and source success / SIP 4xx conflicts",
+                       "url": (f"/d/{NAME}?dtab={_tab_route('PSTN and Direct Routing')}"
+                               f"&viewPanel={evidence['id']}&{_SCOPED_RANGE}")}]
     b.records("teams.pstn_call", "PSTN call records", ("id", "call_id", "call_type", "connectivity_type",
               "duration_seconds", "call_duration_source", "usage_country_code", "tenant_country_code",
               "connection_charge", "currency", "start_time", "end_time"),
@@ -1103,7 +1112,7 @@ def inventory(b):
           "collector. Finishes include unsuccessful attempts. This timestamp does not establish a complete read.")
     b.raw("Phone numbers over time by capability and assignment", [
         f"sum by (tenant_id, capability, number_type, assignment_status) ({latest(numbers)})"],
-        legends=["{{tenant_id}} · {{capability}} · {{number_type}} · {{assignment_status}}"],
+        legends=["{{assignment_status}} · {{number_type}} · {{capability}} · {{tenant_id}}"],
         desc="Each series counts numbers for one capability. Capabilities overlap, so do not add them together.")
     b.metric(unassigned, title="Unassigned phone numbers over time", viz="timeseries")
     b.records("m365.teams.phone_number", "Phone number inventory history", (
@@ -1147,10 +1156,14 @@ def usage(b):
                       unit="none", panel_id=panel_id)
         panel["fieldConfig"]["defaults"]["decimals"] = 0
         panel["options"]["graphMode"] = "none"
+        panel["links"] = [{"title": "Investigate by report refresh date", "url": _USAGE_SOURCE_DATE}]
 
-    b.text("Usage comes from Microsoft's daily Teams reports. The source refresh date can trail the poll, "
-           "and the latest activity day can trail the refresh. Platform and activity groups overlap: "
-           "never add them into a unique-user total.", title="Reading usage", h=3)
+    b.text("Usage comes from Microsoft's daily Teams reports. Platform and activity groups overlap: "
+           "never add them into a unique-user total.\n\n"
+           "Usage snapshots in Loki are dated at **UTC midnight on the source refresh date**, not the poll or "
+           "last activity date. If your range excludes that midnight, an empty result does not mean zero usage "
+           "or a failed collection. "
+           f"[Find snapshots by refresh date]({_USAGE_SOURCE_DATE}).", title="Reading usage", h=4)
     activity = b.cat.metric("m365.teams_usage.activity.users").prom
     b.metric("teams.device_usage.users", title="Teams users by platform (D7)", by=["platform"], w=16,
              desc="From the Teams device usage report. A user may appear on several platforms; do not sum them.")
@@ -1315,6 +1328,12 @@ def _availability(b, selector):
 def health(b):
     selector = f'collector=~`{COLLECTORS}|m365[.]collaboration_activity`'
     _availability(b, selector)
+    starts = b.logs("graph2otel.startup", "graph2otel process starts", panel_id=1041, h=6,
+                    desc="One observation per process start per configured tenant. "
+                         "Compare build versions or configuration fingerprints between starts. "
+                         "A start is not evidence of a crash or of a successful scrape.")
+    starts["fieldConfig"]["defaults"]["noValue"] = (
+        "No process-start observations in range. Check the Loki datasource. This is not a collector health verdict.")
     name = b.cat.metric("graph2otel.collector.expected_interval").prom
     series = f"{name}{{{TENANT_SEL},{selector}}}"
     stamp = f"timestamp({series})"

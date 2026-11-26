@@ -147,6 +147,11 @@ def overview(b: Builder) -> dict:
     census = b.availability(".+")
     guide = b.text(common.PREAMBLE, title="Read this before writing your own query",
                    h=10)
+    guide.setdefault("links", []).append({
+        "title": "Open Teams dashboard",
+        "url": (f"/d/{teams.NAME}?dtab=overview&from=${{__from}}&to=${{__to}}"
+                "&${tenant:queryparam}&${datasource:queryparam}&${loki_datasource:queryparam}"),
+    })
     how_to_pivot = b.text(pivots.PREAMBLE, title="Investigate one entity", h=10)
     leaf = v2.leaf("Overview", [
         v2.rowspec("", [
