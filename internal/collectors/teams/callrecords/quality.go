@@ -91,6 +91,7 @@ func classifyStream(s Stream, q quality.Thresholds) streamQuality {
 			}}
 		}
 	default:
+		// Data is a known label, but it has no CQD rule either.
 		return streamQuality{health: unclassified, cause: causeUnsupportedMedia}
 	}
 
