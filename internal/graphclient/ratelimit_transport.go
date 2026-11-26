@@ -109,13 +109,11 @@ func (t *rateLimitTransport) emitEffectiveRate(wl Workload) {
 	if t.emitter == nil {
 		return
 	}
-	perMin, ok := t.limiter.EffectiveRatePerMinute(t.tenantID, wl)
-	if !ok {
-		return
-	}
-	t.emitter.Gauge(metricThrottleEffectiveRate, "{request}/min",
-		"Current client-side request rate of an adaptive workload limiter, lowered on 429s and raised after runs of successful requests.",
-		perMin, telemetry.Attrs{attrWorkload: string(wl), attrTenantID: t.tenantID})
+	t.limiter.publishEffectiveRate(t.tenantID, wl, func(perMin float64) {
+		t.emitter.Gauge(metricThrottleEffectiveRate, "{request}/min",
+			"Current client-side request rate of an adaptive workload limiter, lowered on 429s and raised after runs of successful requests.",
+			perMin, telemetry.Attrs{attrWorkload: string(wl), attrTenantID: t.tenantID})
+	})
 }
 
 // observeThrottleResponse records the bounded throttle self-obs signals for
