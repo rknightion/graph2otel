@@ -130,13 +130,15 @@ class TeamsDashboardTests(unittest.TestCase):
                          if urlsplit(link["url"]).path == f"/d/{uid}"]
                 self.assertEqual(len(links), 1, "Overview must offer a route to the other dashboard")
                 query = self.scoped_route(links[0]["url"])[1]
-                self.assertEqual(query, {"dtab": ["overview"], **self.selected_scope})
+                self.assertEqual(query, {"dtab": ["overview"], **self.selected_scope()})
                 declared = {var["spec"]["name"] for var in dest["spec"]["variables"]}
                 self.assertLessEqual({key[4:] for key in query if key.startswith("var-")}, declared)
                 self.assertEqual(dest["spec"]["layout"]["spec"]["tabs"][0]["spec"]["title"], "Overview")
 
-    selected_scope = {"from": ["100"], "to": ["200"], "var-tenant": ["tenant-a", "tenant-b"],
-                      "var-datasource": ["example-prom"], "var-loki_datasource": ["example-logs"]}
+    @staticmethod
+    def selected_scope():
+        return {"from": ["100"], "to": ["200"], "var-tenant": ["tenant-a", "tenant-b"],
+                "var-datasource": ["example-prom"], "var-loki_datasource": ["example-logs"]}
 
     @staticmethod
     def scoped_route(url):
@@ -151,7 +153,7 @@ class TeamsDashboardTests(unittest.TestCase):
         chart = next(panel for panel in panels if panel["title"] == "Latest exported Direct Routing effectiveness")
         evidence = next(panel for panel in panels if panel["title"] == "Direct Routing effectiveness counts by poll")
         self.assertIn(("/d/graph2otel-teams", {"dtab": ["pstn-and-direct-routing"],
-                       "viewPanel": [str(evidence["id"])], **self.selected_scope}),
+                       "viewPanel": [str(evidence["id"])], **self.selected_scope()}),
                       [self.scoped_route(link["url"]) for link in chart["links"]])
 
     def test_phone_assignment_legend_distinguishes_tenants_after_type(self):
@@ -161,7 +163,7 @@ class TeamsDashboardTests(unittest.TestCase):
         query = target["spec"]["query"]["spec"]
         self.assertIn('tenant_id=~"$tenant"', query["expr"])
         labels = {"assignment_status": "assigned", "number_type": "directRouting", "capability": "voice"}
-        legends = [re.sub(r"\{\{(\w+)\}\}", lambda match: ({**labels, "tenant_id": tenant})[match[1]],
+        legends = [re.sub(r"\{\{(\w+)\}\}", lambda match, tenant=tenant: ({**labels, "tenant_id": tenant})[match[1]],
                           query["legendFormat"]) for tenant in ("tenant-a", "tenant-b")]
         self.assertEqual(legends, [f"assigned · directRouting · voice · {tenant}" for tenant in ("tenant-a", "tenant-b")])
 
