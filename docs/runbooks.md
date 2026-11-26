@@ -720,23 +720,34 @@ compare with session border controller and provider diagnostics.
 
 ### g2o-teams-call-records-stale
 
-Check the newest observed call's **start time**, not its arrival time. The
-example evaluates Monday through Friday from 12:00 up to 18:00 UTC, allowing
-four hours from an 08:00 UTC workday start. UTC does not shift with daylight
-saving. Change the schedule and horizon together to match the tenant.
+Check the newest call's **arrival**, not its start time. The rule is PromQL over
+the `teams_calls_total` counter, which increments at collection time, once per
+first complete call version. It fires when calls arrived in the last 12 hours
+and none in the last four. The example evaluates Monday through Friday from
+12:00 up to 18:00 UTC, allowing four hours from an 08:00 UTC workday start. UTC
+does not shift with daylight saving. Change the schedule and horizon together
+to match the tenant.
 
-**No data:** A never-seen or very quiet tenant, an out-of-hours query and a missing
-log feed can all produce no result. Start with collector availability and
+What this catches now: a collector, export or OTLP path that has stopped
+delivering new calls, even while old call start times still look recent. What it
+no longer catches: a source that keeps delivering only old records (records
+arrive 38 minutes to 6 hours after their start, so a late batch counts as
+fresh). The previous rule measured newest call start time and so flagged both
+stalls and delayed sources.
+
+**No data:** A tenant whose counter series never existed (no call yet since
+the process started), a tenant with no arrivals in 12 hours and an out-of-hours
+evaluation all produce no result and do not alert. A counter that exists but
+stopped moving is the alerting case. Start with collector availability and
 OTLP delivery; the freshness rule does not monitor those paths.
 
-**Evaluator error:** Check the Loki datasource and instant query, including
-support for structured metadata and the wall-clock time template.
+**Evaluator error:** Check the Prometheus datasource and the instant query.
 
-**False positives:** Quiet afternoons, holidays and late source records can
-look stale even with a moving watermark. It takes a prior record within 12 hours
-and none within four hours to trigger the query.
+**False positives:** Quiet afternoons and holidays can look stale. It takes
+arrivals within 12 hours and none within four hours to trigger the query. A
+process restart resets the counter series; it reappears at the next call.
 
-**Remediation:** Compare recent call starts with collector watermark, scrape
+**Remediation:** Compare recent arrivals with the collector watermark, scrape
 outcomes and OTLP delivery failures. Then check whether calls actually took place.
 
 ### g2o-teams-service-incident-open

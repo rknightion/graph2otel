@@ -106,6 +106,61 @@ def test_cases():
     return cases
 
 
+def stale_scenarios(uid, doc_rule):
+    """Gate and arrival cases for g2o-teams-call-records-stale.
+
+    promtool time zero is Thursday 1970-01-01 00:00 UTC. Eval at 6d14h is
+    Wednesday 14:00; 2d14h is Saturday 14:00. The counter ramps and then stays
+    flat, ending eight hours before the evaluation, so it was seen within 12h
+    and not within 4h. Only the ramp's end is pinned; leading gaps are absent
+    samples, so the series does not exist before it.
+    """
+    step_minutes = 5
+
+    def steps(hours):
+        return hours * 60 // step_minutes
+
+    def scenario(eval_hours, series_values, exp):
+        series = [{"series": f'teams_calls_total{{tenant_id="{t}",call_health="good"}}',
+                   "values": v} for t, v in series_values.items()]
+        return {"interval": "5m", "input_series": series, "alert_rule_test": [
+            {"eval_time": f"{eval_hours}h", "alertname": uid,
+             "exp_alerts": [{"exp_labels": {"tenant_id": t} | doc_rule["labels"]}
+                            for t in exp]}]}
+
+    def stopped(eval_hours, quiet_hours, ramp_hours=2):
+        # absent, ramp up, then flat until past the evaluation time
+        lead = steps(eval_hours - quiet_hours - ramp_hours)
+        return f"_x{lead} 0+1x{steps(ramp_hours)} {steps(ramp_hours)}x{steps(quiet_hours + 24)}"
+
+    wednesday, saturday = 6 * 24 + 14, 2 * 24 + 14
+    out = []
+    for eval_hours, fires in ((wednesday, True), (saturday, False)):
+        out.append(scenario(eval_hours, {
+            "fixture-stale": stopped(eval_hours, 8),
+            "fixture-fresh": stopped(eval_hours, 1),
+            "fixture-old": stopped(eval_hours, 20),
+        }, ["fixture-stale"] if fires else []))
+    # Wednesday 20:00 is outside the 12:00 to 18:00 gate.
+    out.append(scenario(6 * 24 + 20, {"fixture-stale": stopped(6 * 24 + 20, 8)}, []))
+    # A tenant whose counter never existed does not alert.
+    out.append(scenario(wednesday, {}, []))
+    return out
+
+
+def project(generated, uid):
+    doc = rules.to_app_platform(generated[uid], rules.ALERT_GROUP,
+                                rules.GROUP_INTERVAL, 0)["spec"]
+    source = doc["expressions"]
+    a, b, c = (source[ref]["model"] for ref in "ABC")
+    assert a["instant"] and not a["range"], uid
+    evaluator = c["conditions"][0]["evaluator"]
+    comparison = {"lt": "<", "gt": ">"}[evaluator["type"]]
+    expr = f'({a["expr"]}) {comparison} {evaluator["params"][0]}'
+    return doc, {"alert": uid, "expr": expr, "for": doc.get("for", "0s"),
+                 "labels": doc["labels"]}
+
+
 def main():
     generated = {r["uid"]: r for r in rules.RULES}
     alert_rules = []
@@ -128,6 +183,8 @@ def main():
             scenarios.append({"interval": "5m", "input_series": series, "alert_rule_test": [
                 {"eval_time": "50m", "alertname": uid, "exp_alerts": labels},
             ]})
+    stale_uid = "g2o-teams-call-records-stale"
+    stale_doc, stale_rule = project(generated, stale_uid)
     with tempfile.TemporaryDirectory() as scratch:
         root = Path(scratch)
         (root / "rules.yml").write_text(json.dumps({"groups": [{
@@ -136,6 +193,16 @@ def main():
         (root / "test.yml").write_text(json.dumps({"rule_files": ["rules.yml"],
             "evaluation_interval": rules.GROUP_INTERVAL, "tests": scenarios}), encoding="utf-8")
         subprocess.run(["promtool", "test", "rules", "test.yml"], cwd=root, check=True, timeout=30)
+        # The stale rule needs days of simulated time to reach weekday hours, so
+        # it runs alone, apart from the 50m scenarios above.
+        (root / "stale_rules.yml").write_text(json.dumps({"groups": [{
+            "name": rules.ALERT_GROUP, "interval": rules.GROUP_INTERVAL,
+            "rules": [stale_rule]}]}), encoding="utf-8")
+        (root / "stale_test.yml").write_text(json.dumps({"rule_files": ["stale_rules.yml"],
+            "evaluation_interval": rules.GROUP_INTERVAL,
+            "tests": stale_scenarios(stale_uid, stale_doc)}), encoding="utf-8")
+        subprocess.run(["promtool", "test", "rules", "stale_test.yml"], cwd=root, check=True,
+                       timeout=300)
     print(f"{len(alert_rules)} Prometheus rules: adverse, healthy and no-data controls passed")
 
 

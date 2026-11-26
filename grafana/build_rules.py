@@ -914,8 +914,9 @@ _TEAMS_TENANT = 'tenant_id!=""'
 
 
 def _teams_growth(metric, dims, matchers, window):
+    selector = ",".join(part for part in (_TEAMS_TENANT, matchers) if part)
     return (f'sum by ({dims}) (increase({_m(metric)}'
-            f'{{{_TEAMS_TENANT},{matchers}}}[{window}]))')
+            f'{{{selector}}}[{window}]))')
 
 
 def _teams_share(numerator, eligible, dims, minimum):
@@ -934,36 +935,19 @@ def _teams_metric(suffix, title, expr, op, limit, category, description, scope="
     )
 
 
-def _teams_loki(suffix, title, expr, category, severity, description, tuning, hold):
-    rule = _loki_alert(
-        f"g2o-teams-{suffix}", title, expr, "gt", [0],
-        {"source": "m365", "severity": severity, "category": category},
-        f"Tenant {{{{ $labels.tenant_id }}}}: {title}.", description, tuning,
-    )
-    query = rule["data"][0]
-    query["queryType"] = query["model"]["queryType"] = "instant"
-    rule["for"] = hold
-    return rule
-
-
-def _teams_log_count(selector, dims, window):
-    return f"sum by ({dims}) (count_over_time({selector} [{window}]))"
-
-
 def _teams_stale():
-    calls = _sel("teams.call", f("tenant_id", "ne", ""), by="tenant_id")
-    # With a four-hour horizon, start evaluating four hours into the 08-18 UTC
-    # workday. The long leg supplies positive evidence that this tenant had
-    # records; the short leg excludes tenants whose event time is still fresh.
-    # LogQL has no dateInZone formatter. Use UTC epoch hours and offset
-    # by four because epoch day zero is Thursday (Sunday = 0).
-    work_hours = (' | label_format teams_work_hour=`{{ $h := div (unixEpoch (now)) 3600 }}'
-                  '{{ mod (add (div $h 24) 4) 7 }}-{{ mod $h 24 }}`'
-                  ' | teams_work_hour=~`[1-5]-1[2-7]`'
-                  ' | drop teams_work_hour')
-    seen = _teams_log_count(calls + work_hours, "tenant_id", "12h")
-    fresh = _teams_log_count(calls, "tenant_id", "4h")
-    return f"({seen}) unless on (tenant_id) ({fresh})"
+    # Arrival-based: teams_calls_total increments when the collector first sees
+    # a complete call version. The long leg is positive evidence that this
+    # tenant had arrivals; the short leg removes tenants with a recent one. Both
+    # legs keep only a positive increase, because an existing counter that has
+    # stopped moving reports 0, not no data. A tenant whose counter series never
+    # existed yields no result at all, so it stays quiet. The gate is UTC
+    # Monday to Friday, 12:00 up to 18:00 (four hours into an 08:00 workday).
+    seen = _teams_growth("teams.calls", "tenant_id", "", "12h")
+    fresh = _teams_growth("teams.calls", "tenant_id", "", "4h")
+    gate = ("day_of_week() >= 1 and day_of_week() <= 5 "
+            "and hour() >= 12 and hour() < 18")
+    return f"(({seen}) > 0 unless on (tenant_id) (({fresh}) > 0)) and on () ({gate})"
 
 
 def _teams_open_incidents():
@@ -1036,16 +1020,16 @@ def _teams_rules():
             "More than 10% of at least 20 attempts in 30m failed with SIP 5xx on a named "
             "trunk. Other SIP error classes do not count as 5xx evidence.", trunk_scope,
         ),
-        _teams_loki(
-            "call-records-stale", "Teams call-record event time is stale", _teams_stale(),
-            "teams-collection", "warning",
-            "The newest observed call start is over 4h old, but calls were seen in the "
-            "last 12h. Checks weekdays from 12:00 to 18:00 UTC (four hours into the "
-            "08:00 to 18:00 UTC workday, no daylight-saving shift). Never-seen, missing "
-            "or very quiet traffic is not enough evidence. A quiet afternoon or delayed "
-            "source event time can still look stale; check collector health separately.",
-            "Validate the Loki query, expected traffic, event delay and business hours "
-            "for your tenant before enabling.", "15m",
+        _teams_metric(
+            "call-records-stale", "Teams call-record arrival is stale", _teams_stale(),
+            "gt", 0, "teams-collection",
+            "No new call record has arrived in the last 4h, but calls arrived in the "
+            "last 12h. Measures arrival at collection time (first complete call "
+            "version), not call start time, so late source records no longer look "
+            "stale. Checks weekdays from 12:00 to 18:00 UTC (four hours into the "
+            "08:00 to 18:00 UTC workday, no daylight-saving shift). A tenant whose "
+            "counter never existed, or had no arrivals in 12h, does not alert. A quiet "
+            "afternoon can still look stale; check collector health separately.",
         ),
         _teams_metric(
             "service-incident-open", "Microsoft Teams service incident is open",
@@ -1857,10 +1841,6 @@ def to_app_platform(rule: dict, group: str, interval: str, index: int) -> dict:
         entry = {"model": model}
         if node.get("datasourceUid") and node["datasourceUid"] != EXPR_UID:
             entry["datasourceUID"] = node["datasourceUid"]
-            # Grafana echoes the explicit Loki instant mode on the expression
-            # as well as in its model. Preserve it so strict read-back matches.
-            if node.get("queryType") == "instant":
-                entry["queryType"] = node["queryType"]
             window = node.get("relativeTimeRange") or {}
             entry["relativeTimeRange"] = {
                 "from": go_duration(window.get("from", 0)),
@@ -2263,7 +2243,7 @@ DASHBOARD_TARGETS = {
         ("M365", "Direct Routing network effectiveness by trunk (0 to 1)"),
     "g2o-teams-trunk-sip-5xx-high":
         ("M365", "Direct Routing attempt rate by trunk, outcome and SIP class"),
-    "g2o-teams-call-records-stale": ("M365", "Teams calls by detail version"),
+    "g2o-teams-call-records-stale": ("M365", "Call rate by initial health"),
     "g2o-teams-service-incident-open": ("M365", "Service health issues total"),
     "g2o-detect-privileged-directory-change":
         ("Entra", "Top directory audit activities"),
