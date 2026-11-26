@@ -86,8 +86,8 @@
 // hidden NON-system rule are UNOBSERVED on this tenant (#363; only the
 // forwarding rule and the system Junk E-mail Rule have been seen live). All
 // are mapped — they are documented Get-InboxRule actions — but none is given a
-// wirecheck.Enum watch: one observed value is not a value set (CLAUDE.md), and
-// this package has observed at most one value for each.
+// wirecheck.Enum watch: one observed value is not a value set (see
+// reference/telemetry-model.md), and at most one has been observed for each.
 //
 // # Severity — Warn means "forwards or redirects", not "is malicious"
 //

@@ -574,7 +574,7 @@ func (f pageFetcherFunc) FetchPage(ctx context.Context, pageURL string) ([]map[s
 //     attribute. This is what keeps them dedupe-able on `id` (blob.go:138-146),
 //     and it is the property a careless "fix" breaks: forking mapSignIn into a
 //     blob variant and a polled variant would satisfy (1) and silently destroy
-//     (2). CLAUDE.md pins the single shared mapper for this reason.
+//     (2). See the shared-mapper rule in reference/telemetry-model.md.
 func TestBlobAndPolledSignInDifferOnlyByIngestTransport(t *testing.T) {
 	const tenant = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
 

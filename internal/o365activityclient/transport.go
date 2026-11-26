@@ -55,7 +55,7 @@ const defaultMaxRetries = 3
 // It exists to make a cardinality bug impossible rather than merely unlikely: a
 // content-fetch URL ends in an opaque contentId, so using the request path as
 // an attribute would mint one metric series per blob — a series that receives
-// exactly one sample, ever. That is the pathological TSDB case CLAUDE.md bans.
+// exactly one sample, ever. See the cardinality rule in reference/telemetry-model.md.
 // Every URL collapses to one of the constants below.
 type Operation string
 

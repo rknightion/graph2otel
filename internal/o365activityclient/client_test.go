@@ -238,8 +238,8 @@ func TestRequestURLShape(t *testing.T) {
 
 // TestClassifyOperationIsBounded is a cardinality guard, not a cosmetic one. A
 // content-fetch URL embeds an opaque contentId; using the raw path as a metric
-// attribute would mint one series per blob — the pathological case CLAUDE.md
-// bans. Every classification must collapse to a bounded, enumerable value.
+// attribute would mint one series per blob. The cardinality rule in
+// reference/telemetry-model.md requires a bounded set of classifications.
 func TestClassifyOperationIsBounded(t *testing.T) {
 	const contentID = "492638008028$492638008028$f28ab78ad40140608012736e373933ebspo2015043022$4a81a7c326fc4aed89c62e6039ab833b$04"
 	root := "/api/v1.0/" + testTenantID + "/activity/feed"

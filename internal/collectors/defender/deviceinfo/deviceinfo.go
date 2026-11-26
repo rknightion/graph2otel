@@ -115,9 +115,8 @@ func mapRecord(rec map[string]any) (telemetry.Event, bool) {
 	// encoding/json rounds it during decode (…463703 → …463744) before any
 	// mapper sees it — the raw digits are unrecoverable from the decoded map.
 	// The device's identity is DeviceId (a stable hash), which IS exact;
-	// emitting a knowingly-rounded id as if precise is the kind of wrong data
-	// CLAUDE.md's rules reject. The event tables keep ReportId because theirs is
-	// small (≤ ~40k) and exact. See #106.
+	// emitting a knowingly-rounded id would misrepresent the data. The event
+	// tables keep ReportId because theirs is small (≤ ~40k) and exact. See #106.
 	defender.StampStrings(attrs, props, deviceInfoStrFields)
 	defender.StampNums(attrs, props, deviceInfoNumFields)
 	defender.StampBools(attrs, props, deviceInfoBoolFields)

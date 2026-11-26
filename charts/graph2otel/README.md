@@ -174,8 +174,8 @@ disable both the admin server and the probes.
 `replicaCount` is fixed at `1` by design (the schema rejects any other value):
 graph2otel is a single-instance poller with no leader election in v1 (none of
 the polled Graph endpoints support consumer-group/delta semantics that would
-make multi-replica coordination worthwhile — see the app repo's CLAUDE.md). Do
-not raise it or add a StatefulSet/HA topology; doing so double-polls every
+make multi-replica coordination worthwhile). See [the app's architecture](../../AGENTS.md#architecture-the-seams).
+Do not raise it or add a StatefulSet/HA topology; doing so double-polls every
 tenant and double-emits every metric and log. `strategy.type: Recreate`
 reflects this — a rolling update briefly runs zero replicas rather than ever
 running two.
@@ -272,7 +272,7 @@ running two.
 | podAnnotations | object | `{}` | Extra annotations for the pod. |
 | podLabels | object | `{}` | Extra labels for the pod. |
 | podSecurityContext | object | `{"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch","runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod-level security context. Runs as non-root with the RuntimeDefault seccomp profile; the app needs no special privileges. fsGroup makes the opt-in PVC persistence path (persistence.enabled=true) reliably writable by the uid-65532 container regardless of the CSI driver's default ownership behavior — a freshly provisioned block PVC is typically root:root on many drivers. The default emptyDir checkpoint volume already works without this (kubelet chmods emptyDir roots 0777). |
-| replicaCount | int | `1` | Replica count. Keep at 1 — graph2otel is a single-instance poller with no leader election or HA in v1 (see CLAUDE.md Architecture: none of the polled Graph endpoints support consumer-group/delta semantics that would make multi-replica coordination pay for itself). Scaling this up double-polls every tenant and double-emits every metric and log. |
+| replicaCount | int | `1` | Replica count. Keep at 1 — graph2otel is a single-instance poller with no leader election or HA in v1 (see AGENTS.md Architecture: none of the polled Graph endpoints support consumer-group/delta semantics that would make multi-replica coordination pay for itself). Scaling this up double-polls every tenant and double-emits every metric and log. |
 | resources | object | `{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}` | Resource requests and limits. graph2otel caches per-tenant inventory (users/devices/groups/etc.) between polls, so the working set scales with tenant size and enabled-collector count more than tailscale2otel's — raise limits for a large multi-tenant deployment or many opt-in Intune/beta collectors. |
 | secret | object | `{"AZURE_CLIENT_ID":"","AZURE_CLIENT_SECRET":"","AZURE_TENANT_ID":""}` | Inline secret values rendered into a Secret and injected via envFrom. Keys left empty ("") are NOT rendered into the Secret, so azidentity's credential-chain fallbacks (workload identity, managed identity) still work when you deliberately omit a client-secret/certificate pair. |
 | secret.AZURE_CLIENT_ID | string | `""` | Ambient application client ID used by environment credentials, workload identity, or to select a user-assigned managed identity. One value applies to the process. config.tenants[].client_id is only a consistency assertion and never replaces or overrides this credential selection. |

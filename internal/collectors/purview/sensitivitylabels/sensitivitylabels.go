@@ -25,7 +25,7 @@
 // "Highly Confidential - Finance") chosen by a handful of admins, not
 // per-entity data — every document in the tenant that carries the label shares
 // that one name, so it carries none of the per-user/per-device identifying
-// weight CLAUDE.md's cardinality/PII rule is about. The reason the name (and
+// weight discussed in reference/telemetry-model.md. The reason the name (and
 // priority, and the free-text description) stays OFF the metric is cardinality,
 // not privacy: a per-label series would be one series per catalog label with
 // every value == 1 (see the `priority` note below) — series count growing with
@@ -85,7 +85,8 @@
 // `priority`, a dense per-label sequential integer. Bucketing a count by
 // priority would mint one series per label (each value == 1) — per-entity
 // cardinality that grows with the label count and carries no aggregation value,
-// exactly what CLAUDE.md forbids. So this collector emits purview.labels.count
+// exactly what the cardinality rule in reference/telemetry-model.md forbids.
+// So this collector emits purview.labels.count
 // bucketed only by `applicableTo` (a bounded target enum) and keeps priority
 // off the metric — it lands in the purview.sensitivity_label log twin instead.
 package sensitivitylabels
@@ -125,9 +126,8 @@ const sensitivityLabelEventName = "purview.sensitivity_label"
 
 // sensitivityLabel mirrors the sensitivityLabel fields this package uses:
 // ApplicableTo buckets the metric; ID/Name/Priority/Description feed only the
-// purview.sensitivity_label log twin, never a metric label (CLAUDE.md
-// cardinality rule — see the package doc for why that's a cardinality
-// argument, not a PII one). Every other Graph field (tooltip, color,
+// purview.sensitivity_label log twin, never a metric label (see the package
+// doc and the cardinality rule in reference/telemetry-model.md). Every other Graph field (tooltip, color,
 // isEnabled, actionSource, ...) is not needed by either output and stays
 // undecoded.
 type sensitivityLabel struct {
@@ -244,7 +244,7 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter,
 
 		// priority is emitted as a string, matching every other log attribute in
 		// this codebase: log attributes are Loki structured metadata (string-typed
-		// on the wire regardless of OTEL attribute kind — see CLAUDE.md), so a
+		// on the wire regardless of OTEL attribute kind; see docs/signals.md), so a
 		// numeric OTEL kind buys nothing here and only this package's own log
 		// twins would differ from house convention if it did.
 		attrs := telemetry.Attrs{semconv.AttrPriority: strconv.Itoa(l.Priority)}

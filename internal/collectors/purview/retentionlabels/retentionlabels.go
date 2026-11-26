@@ -24,7 +24,7 @@
 // A retention label's name is a tenant-wide POLICY name chosen by a handful of
 // admins, not per-entity data — every document in the tenant that carries the
 // label shares that one name, so it carries none of the per-user/per-device
-// identifying weight CLAUDE.md's cardinality/PII rule is about. The reason the
+// identifying weight discussed in reference/telemetry-model.md. The reason the
 // name and the free-text descriptions stay OFF the metrics is cardinality, not
 // privacy: a per-label series would be one series per catalog row with every
 // value == 1 — series count growing with the catalog and carrying no

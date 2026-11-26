@@ -33,8 +33,8 @@ package semconv
 // Temporary Access Pass, hardware/software OATH, email and custom/external
 // configurations therefore arrive deliberately under-described until someone
 // captures them and extends the known-subtype set with evidence — the same
-// discipline CLAUDE.md's wire-value-watching section applies to metric
-// labels, applied here to which fields a log twin is allowed to claim.
+// evidence standard the wire-value watchdog in reference/telemetry-model.md
+// applies to metric labels, used here for the log twin's fields.
 const (
 	// AttrPolicyVersion is the policy event's policyVersion (e.g. "1.5").
 	AttrPolicyVersion = "policy_version"
@@ -64,8 +64,7 @@ const (
 	AttrExcludeTargetCount = "exclude_target_count"
 
 	// AttrIncludeTargetsTruncated / AttrExcludeTargetsTruncated report
-	// whether the corresponding id array above was cut at the cap — the
-	// "capped, and say so" half of CLAUDE.md's bounded-array rule.
+	// whether the corresponding id array above was cut at the cap.
 	AttrIncludeTargetsTruncated = "include_targets_truncated"
 	AttrExcludeTargetsTruncated = "exclude_targets_truncated"
 

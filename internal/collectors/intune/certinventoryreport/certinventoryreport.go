@@ -334,10 +334,8 @@ func (c *Collector) Experimental() bool { return true }
 // DeviceManagementManagedDevices.ReadWrite.All is a WRITE scope, needed only
 // to CREATE the export job (POST .../deviceManagement/reports/exportJobs);
 // reading the completed job's result back needs no elevated scope. See
-// internal/exportjob's package doc and the project CLAUDE.md gotcha
-// "Reports export API needs a write-level scope just to create the export
-// job" — documented here rather than silently requesting more than that one
-// exception requires.
+// internal/exportjob's package doc and the export-job write-scope note in
+// docs/graph-api-gotchas.md.
 func (c *Collector) RequiredPermissions() []string {
 	return []string{"DeviceManagementManagedDevices.ReadWrite.All"}
 }

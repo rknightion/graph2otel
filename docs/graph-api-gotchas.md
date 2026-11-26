@@ -165,8 +165,9 @@ issue. Do not record correction narratives here — those live on the issues.
   too, verified separately from the literal-space form a probe sends.
 
   **The lesson beyond this segment:** a `200` carrying rows is not evidence the collection
-  is complete. `CLAUDE.md`'s "a green tick is not evidence of data" covers empty-success;
-  this is *partial* success, which is worse, because there is nothing anomalous to notice.
+  is complete. [AGENTS.md](../AGENTS.md#top-traps) explains why an empty success is not
+  evidence of data. This is *partial* success, which is worse because there is nothing
+  anomalous to notice.
   When a collection is per-entity in nature, cross-check its row count against an entity
   list you already hold.
 - **`$count=true` on `userExperienceAnalyticsModelScores` returns the count and DROPS the

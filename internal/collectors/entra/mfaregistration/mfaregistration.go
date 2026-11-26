@@ -93,7 +93,7 @@
 // materially higher volume than the entra.risk log twin (which only emits
 // for the, typically small, currently-risky population).
 //
-// Identity is never a metric label here (CLAUDE.md's cardinality rule):
+// Identity is never a metric label here (see reference/telemetry-model.md):
 // the three status/method/admin-split gauges above stay bounded by their
 // fixed enum/method dimensions regardless of tenant size — see
 // TestNoPerEntitySeries.
@@ -122,7 +122,7 @@ import (
 const collectorName = "entra.mfa_registration"
 
 // Metric names this collector emits, all namespaced entra.mfa.registration.*
-// per CLAUDE.md's metric namespace convention.
+// per the namespace rules in reference/telemetry-model.md.
 const (
 	statusMetricName          = "entra.mfa.registration.users.total"
 	methodMetricName          = "entra.mfa.registration.methods.total"
@@ -179,8 +179,8 @@ var registrationStatuses = []registrationStatus{
 // userRegistrationDetails resource this collector reads. The seven posture
 // fields feed the bounded metrics (see registrationStatuses / Collect);
 // ID/UserPrincipalName/UserDisplayName/LastUpdatedDateTime feed ONLY the
-// entra.user_registration log twin (logTwin) — CLAUDE.md's cardinality rule
-// means they must never reach a metric label, but "not a metric label"
+// entra.user_registration log twin (logTwin). Under the cardinality rule in
+// reference/telemetry-model.md, they never reach a metric label, but "not a metric label"
 // means "log twin", not "dropped" (see the package doc's Log-twin section
 // and TestNoPerEntitySeries, which pins the metric side of that boundary).
 // Field names/casing verified against learn.microsoft.com/graph/api/

@@ -399,7 +399,7 @@ var postTimeLayouts = []string{time.RFC3339, time.RFC3339Nano}
 
 // parsePostTime parses a post's createdDateTime. ok is false for an empty or
 // unparseable value — the caller drops the post rather than emit it stamped
-// with arrival time (CLAUDE.md: a record with no parseable event time must be
+// with arrival time (AGENTS.md: a record with no parseable event time must be
 // dropped, never stamped on arrival).
 func parsePostTime(s string) (time.Time, bool) {
 	if s == "" {

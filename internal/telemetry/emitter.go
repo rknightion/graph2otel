@@ -380,7 +380,7 @@ func logKV(k string, v any) attribute.KeyValue {
 }
 
 // buildAttrs converts attrs to OTEL metric attributes. graph2otel has no
-// Prometheus pull endpoint (OTLP push only, see CLAUDE.md), so — unlike a
+// Prometheus pull endpoint (OTLP push only, see AGENTS.md), so — unlike a
 // scrape target — there is no promoted-resource-label namespace a data-point
 // attribute could collide with; a plain per-key conversion is enough.
 func buildAttrs(attrs Attrs) []attribute.KeyValue {

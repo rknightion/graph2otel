@@ -11,8 +11,8 @@ var ExpectedExceptionScopes = map[string]string{
 	// bulk Intune reports) requires a ReadWrite scope just to CREATE the
 	// export job, even though graph2otel only ever reads the exported
 	// result back. This is documented Microsoft Graph behavior, not a
-	// graph2otel design choice — see the "Reports export API needs a
-	// write-level scope" gotcha in the project README/CLAUDE.md.
+	// graph2otel design choice. See the export-job write-scope note in
+	// docs/graph-api-gotchas.md.
 	"DeviceManagementManagedDevices.ReadWrite.All": "required only to CREATE an Intune reports-export job " +
 		"(POST /deviceManagement/reports/exportJobs — used by the app-install, certificate-inventory, and " +
 		"Defender-agent report collectors); graph2otel only reads the exported result back, never writes any " +

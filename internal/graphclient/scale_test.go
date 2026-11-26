@@ -64,7 +64,7 @@ func TestScalePerTenantLimiterIsolation(t *testing.T) {
 }
 
 // TestScaleLimiterBudgetsMatchDocumentedCeilings pins the configured limiter
-// rates to the documented Graph throttling budgets (CLAUDE.md gotchas). A change
+// rates to the documented Graph throttling budgets (docs/graph-api-gotchas.md). A change
 // to a budget here is a deliberate act that should update the docs too; this
 // catches an accidental drift. Fast (no real waiting).
 func TestScaleLimiterBudgetsMatchDocumentedCeilings(t *testing.T) {

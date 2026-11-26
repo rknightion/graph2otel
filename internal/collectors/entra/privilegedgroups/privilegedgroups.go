@@ -7,7 +7,7 @@
 // Every other Entra group signal in this project (internal/collectors/entra/
 // groups) is a strictly bounded population aggregate with no per-group
 // dimension, because an unconstrained group_id label grows with tenant size —
-// exactly the mistake CLAUDE.md's cardinality rule exists to prevent (#112).
+// exactly what the cardinality rule in reference/telemetry-model.md forbids (#112).
 // This collector is the deliberate, narrow exception: group_id is a label
 // ONLY for groups an operator explicitly named in a per-tenant allowlist
 // (config.PrivilegedGroupsConfig.GroupIDs), capped at

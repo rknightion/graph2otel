@@ -108,7 +108,7 @@ func TestStartAnnotatorCarriesTheSharedConfigFingerprint(t *testing.T) {
 // gate. The rule set can only see a record if the scheduler's per-run emitter is
 // the teed one; wiring provider.CollectorEmitter directly compiles, passes every
 // annotations-package test, and publishes nothing — the exact shape of the
-// #139/#100 incident CLAUDE.md records.
+// invisible-collector failure described in AGENTS.md.
 func TestSchedulerEmitterFactoryIsTeedThroughTheAnnotationRuleSet(t *testing.T) {
 	raw, err := os.ReadFile("tenants.go")
 	if err != nil {

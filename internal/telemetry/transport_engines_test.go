@@ -27,12 +27,10 @@ var stampingEngines = map[string]telemetry.Transport{
 // re-wrap does not fail loudly — it inherits "graph" and ships a confident lie,
 // which is worse than shipping no provenance at all.
 //
-// This is not hypothetical, and it is not a new class of bug on this project.
-// CLAUDE.md records the #139/#100 incident in these terms: "a fourth
-// registration path landed and the coverage test stayed green over a missing
-// collector" — a design enumerated the paths it knew about, a path outside the
-// enumeration existed, and the gate could not see it. A hand-maintained list of
-// engines would repeat exactly that. So this test does not trust the list: it
+// The collector registration rule in AGENTS.md addresses the same failure:
+// a coverage gate stayed green after a new registration path landed because
+// its list of paths did not include the new one. A hand-maintained list of
+// engines could have the same gap. This test does not trust the list: it
 // reads the tree and fails if the tree contains an engine the list does not.
 func TestEveryEngineStampsItsOwnTransport(t *testing.T) {
 	for pkg, want := range stampingEngines {

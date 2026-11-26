@@ -108,9 +108,8 @@ type actionStep struct {
 // relationship is genuinely empty" (non-nil pointer to a zero-length slice).
 // Only the former must emit no series/attribute — see the package doc.
 //
-// CurrentScore/MaxScore are POINTERS for the same reason CLAUDE.md's
-// absent-field-is-not-a-sentinel rule requires generally: a plain float64
-// cannot tell "the wire said 0.0" from "the wire said nothing", and a nil
+// CurrentScore/MaxScore are pointers: a plain float64 cannot tell
+// "the wire said 0.0" from "the wire said nothing", and a nil
 // pointer omits the twin attribute rather than publishing a fabricated 0.
 type recommendation struct {
 	ID                    string             `json:"id"`

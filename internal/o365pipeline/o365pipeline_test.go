@@ -408,9 +408,8 @@ func TestCollectSkipsExpiredBlob(t *testing.T) {
 	}
 }
 
-// TestCollectSurfacesThrottling pins that AF429 is NOT swallowed. CLAUDE.md is
-// emphatic that a blanket status swallow is how a real bug hides: only the
-// specific, documented, terminal conditions are absorbed.
+// TestCollectSurfacesThrottling checks that AF429 reaches the caller. Only
+// specific, documented terminal conditions are absorbed.
 //
 // This test is deliberately slow (~5s): 429 is retryable, the client's retry
 // transport cannot be disabled from outside its package, and serving a fake
@@ -443,7 +442,7 @@ func TestCollectSurfacesThrottling(t *testing.T) {
 // TestCollectSurfacesAMalformedRequestError pins the other half of "never
 // blanket-swallow a status": AF20052 is a 400, exactly like the expired-content
 // and no-subscription conditions that ARE absorbed, but it signals a real bug
-// and must reach the caller. Swallowing every 400 is the trap CLAUDE.md names.
+// and must reach the caller. Swallowing every 400 would hide that bug.
 func TestCollectSurfacesAMalformedRequestError(t *testing.T) {
 	base := testBase()
 	api := newFakeAPI(t, blobSpec{

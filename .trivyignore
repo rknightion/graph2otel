@@ -21,9 +21,8 @@ KSV-01010
 KSV-0110
 
 # KSV-0125 — "image from an untrusted registry".
-# FALSE POSITIVE: ghcr.io/rknightion/tailscale2otel is the project's own
-# first-party publish registry, cosign keyless-signed via GitHub OIDC (see
-# deploy/CLAUDE.md release/publish pipelines).
+# FALSE POSITIVE: ghcr.io/rknightion/graph2otel is the project's own image,
+# signed with Cosign via GitHub OIDC (see .github/workflows/release-please.yml).
 KSV-0125
 
 # DS-0026 — "no HEALTHCHECK instruction".

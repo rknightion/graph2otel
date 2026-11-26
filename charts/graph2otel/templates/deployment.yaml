@@ -6,7 +6,7 @@ metadata:
     {{- include "graph2otel.labels" . | nindent 4 }}
 spec:
   # Single-instance poller — do not scale horizontally (would double-poll every
-  # tenant and double-emit every metric/log; see CLAUDE.md Architecture).
+  # tenant and double-emit every metric/log; see AGENTS.md Architecture).
   replicas: {{ .Values.replicaCount }}
   strategy:
     type: Recreate

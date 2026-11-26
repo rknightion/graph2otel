@@ -177,7 +177,7 @@ type queryResponse struct {
 //
 // An absent, null or empty "results" returns an EMPTY SLICE AND A NIL ERROR,
 // never an error: a query that matches nothing (a healthy tenant, a filter with
-// no hits) is the steady state, and CLAUDE.md's "a green tick is not evidence of
+// no hits) is the steady state, and AGENTS.md's "a green tick is not evidence of
 // data" rule is honored by writing the mapper against live samples, not by
 // treating emptiness as failure here.
 func (c *Client) Query(ctx context.Context, label, kql string) ([]map[string]any, error) {

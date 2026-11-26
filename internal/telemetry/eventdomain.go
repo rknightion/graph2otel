@@ -43,7 +43,7 @@ import (
 // test checks this file against, and two different derivations would let a
 // record be ROUTED to one domain while being CATALOGED under another, which
 // is worse than having no split at all. The segments are exactly the telemetry
-// namespaces CLAUDE.md already mandates (entra / intune / m365 / purview /
+// namespaces in reference/telemetry-model.md (entra / intune / m365 / purview /
 // defender / mdca for domain signals, graph2otel for self-observability), so
 // the split costs no new naming decision.
 //

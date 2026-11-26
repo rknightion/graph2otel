@@ -20,8 +20,8 @@
 // The v1.0 per-device scores and both PER-BOOT / PER-APPLICATION-INSTANCE
 // collections (device startup histories, app health performance) scale with
 // fleet size and polling cadence - a 10k-device fleet can produce hundreds of
-// thousands of startup-history rows a month. Per CLAUDE.md's cardinality
-// rule, none of that raw shape becomes a metric label: startup history rolls
+// thousands of startup-history rows a month. Under the cardinality rule in
+// reference/telemetry-model.md, none becomes a metric label: startup history rolls
 // up into bounded boot/login-time HISTOGRAMS (bucketed only by the fixed
 // restartCategory enum) with NO log twin (per-boot attribution is pure ops -
 // the #114-audited exception, see collectStartupHistories); per-device scores
@@ -966,7 +966,7 @@ func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emi
 		// Unlike the state twins in this file, a boot is an EVENT: it happened at
 		// startTime and stamping it with poll time would pile every historical
 		// restart onto one instant. An unparseable startTime leaves the timestamp
-		// zero, which the emitter treats as "no event time" — per CLAUDE.md a
+		// zero, which the emitter treats as "no event time" (see AGENTS.md). A
 		// record must never be stamped on arrival, because that would silently
 		// claim the boot happened now.
 		ev := telemetry.Event{

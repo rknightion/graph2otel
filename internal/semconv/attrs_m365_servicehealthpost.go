@@ -38,7 +38,7 @@ package semconv
 // 2176 B (2026-07-27, #367, n=829). The cap is 8192 bytes — 3.8x the observed
 // max and 4.6x p95, so nothing on the wire today is touched — enforced in
 // internal/collectors/m365/servicehealth. A body over the cap is TRUNCATED,
-// never dropped: CLAUDE.md's rule ("undedupeable is degraded; misdated is
+// never dropped: AGENTS.md's emitter rule ("undedupeable is degraded; misdated is
 // wrong — only wrong justifies a drop") generalizes here, because a
 // truncated body still carries a correct post identity, issue linkage, and
 // event time — a dropped post would instead be a missing timeline entry,

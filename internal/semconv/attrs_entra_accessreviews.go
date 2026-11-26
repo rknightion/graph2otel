@@ -106,8 +106,7 @@ const (
 	// returned by the BETA endpoint and NOT by v1.0 (live-measured 2026-07-24,
 	// #260 — both were probed), and this collector reads v1.0. Emitting a zero
 	// for a field the chosen endpoint never sends would publish a fabricated
-	// fact, which is the failure mode CLAUDE.md's "absent field is not a
-	// sentinel" rule exists to stop.
+	// fact. See the optional numerics trap in LOOP.md.
 	AttrFallbackReviewerCount = "fallback_reviewer_count"
 	// AttrAdditionalNotificationRecipientCount is
 	// len(additionalNotificationRecipients).

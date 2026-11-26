@@ -538,8 +538,8 @@ func TestCollectorEmitsFullRecordsEndToEnd(t *testing.T) {
 
 	// THE content exclusion, checked at the emitter: a modifiedProperties
 	// old/new value must never appear in ANY attribute or body of ANY emitted
-	// record. For a credential change the value IS the credential (CLAUDE.md:
-	// the one content exclusion in graph2otel, about secrets, not PII). Both the
+	// record. For a credential change the value IS the credential (see the
+	// secret exclusion in reference/telemetry-model.md). Both the
 	// synthetic secret AND the live record's real newValues are checked.
 	forbidden := []string{
 		secretOld, secretNew,

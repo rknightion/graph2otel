@@ -484,7 +484,7 @@ func TestRecordTypeToleratesNumericTypeFlips(t *testing.T) {
 // --- SECURITY ---
 
 // TestMapRecordNeverEmitsModifiedPropertyValues is the security test for
-// CLAUDE.md's ONE genuine content exclusion, and it is about SECRETS, not PII.
+// the secret exclusion in reference/telemetry-model.md; it does not exclude PII.
 //
 // ModifiedProperties[].OldValue/NewValue carry whatever the changed property
 // held — for a credential or certificate change, that is the credential itself.
@@ -540,8 +540,8 @@ func TestMapRecordNeverEmitsModifiedPropertyValues(t *testing.T) {
 // A first pass withheld these values too, reasoning that the Value is a
 // JSON-ENCODED STRING — a nested document inside a string field (#100) — of
 // unbounded, workload-defined shape. That is an argument about being awkward to
-// model, not about being unsafe, and CLAUDE.md is explicit that reading the
-// secret exclusion as general caution is what produced #110 and #111. Live,
+// model, not about being unsafe. Applying the secret exclusion as general
+// caution produced #110 and #111 (see reference/telemetry-model.md). Live,
 // these carry additionalDetails ({"User-Agent":…,"AppId":…}),
 // extendedAuditEventCategory, and LoginError (";PP_E_BAD_PASSWORD;…") — the
 // anomalous-client and failed-logon signal a SIEM builds detections on.

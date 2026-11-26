@@ -2,8 +2,7 @@
 
 graph2otel exports every domain signal under a bounded OTLP dot-notation
 namespace. A new collector emitting outside its domain's namespace is a bug, not a
-style choice — see `CLAUDE.md`'s "Metric namespaces" section for the enforced
-convention.
+style choice. See [the namespace rules](../reference/telemetry-model.md#namespaces-and-opt-in-gates).
 
 - **`entra.*`** — Entra ID directory, sign-in, and audit signals.
 - **`intune.*`** — Intune device management and compliance signals.

@@ -30,7 +30,7 @@
 // sensor observed the event — never the envelope `time` or `_TimeReceivedBySvc`,
 // which are Azure's export/ingest clocks and run seconds-to-minutes later
 // (live-measured 2026-07-18, #106). There is no fallback: a record with no
-// parseable Timestamp is dropped rather than mis-dated (CLAUDE.md emitter rule —
+// parseable Timestamp is dropped rather than mis-dated (AGENTS.md emitter rule —
 // misdated is wrong, and only wrong justifies a drop).
 package defender
 

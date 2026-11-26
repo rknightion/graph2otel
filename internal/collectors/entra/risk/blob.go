@@ -26,7 +26,7 @@ package risk
 // RE-EMITS every risky user every cycle — a state feed), each blob record is a
 // distinct append-only assessment emitted once, so it binds to the real event
 // time (riskLastUpdatedDateTime). An unparseable time drops the record rather
-// than mis-dating it (CLAUDE.md). Mapped against a live RiskyUsers sample
+// than mis-dating it (AGENTS.md). Mapped against a live RiskyUsers sample
 // (2026-07-18, #135).
 
 import (

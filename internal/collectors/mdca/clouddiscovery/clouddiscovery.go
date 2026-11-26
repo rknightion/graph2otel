@@ -88,8 +88,8 @@
 // happens. tags are NOT capped: this collector's live sample never observed a
 // non-empty tags array, so there is no evidence yet that it needs the same
 // treatment (the same "don't generalize an awkward-to-model field into an
-// unsafe one" caution CLAUDE.md gives for content exclusions applies in
-// reverse here — don't invent a cap against a shape nobody has seen).
+// unsafe one" caution in reference/telemetry-model.md applies in reverse
+// here: don't invent a cap against a shape nobody has seen).
 //
 // # Absent is not false
 //

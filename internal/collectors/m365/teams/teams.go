@@ -15,7 +15,9 @@
 // classification) and kept cheap by a long default interval — Teams inventory
 // is not a sub-hour signal.
 //
-// # Cardinality (CLAUDE.md): metrics carry aggregates, logs carry entities
+// # Cardinality: metrics carry aggregates, logs carry entities
+//
+// See reference/telemetry-model.md for the cardinality rule.
 //
 // The metrics are bounded, tenant-shaped counts: teams by visibility, the
 // ownerless and with-guests totals, and membership by role. A team id or name

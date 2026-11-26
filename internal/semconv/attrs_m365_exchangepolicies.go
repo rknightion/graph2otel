@@ -27,7 +27,7 @@ package semconv
 // AutoForwardingMode and ActionWhenThresholdReached (outbound spam) and
 // DirectoryBasedEdgeBlockMode (connection filter) were each observed with
 // exactly ONE live value on the m7kni tenant (2026-07-28). Per this
-// project's wirecheck rule (CLAUDE.md, #233/#234), one observed value is not
+// project's wirecheck rule (reference/telemetry-model.md, #233/#234), one observed value is not
 // a value set: a watchdog built off it would fire the moment a tenant's
 // second, entirely legitimate value showed up. All three are carried as
 // plain strings on their twins with no internal/wirecheck Enum declared —

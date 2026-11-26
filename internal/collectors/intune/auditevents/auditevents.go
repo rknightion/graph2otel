@@ -47,7 +47,7 @@
 // so per-entity detail — the record id, correlationId, actor identifiers,
 // resource ids — belongs here as structured log attributes. That same data
 // must NEVER become a metric label; this package emits no metrics. See
-// CLAUDE.md: the boundary is a data-modeling rule, not a privacy control.
+// reference/telemetry-model.md for why this bounds cardinality rather than acting as a privacy control.
 //
 // License gate: none declared. RequiredPermissions'
 // DeviceManagementApps.Read.All is a surprising scope for an audit endpoint

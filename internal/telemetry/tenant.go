@@ -33,7 +33,7 @@ type tenantEmitter struct {
 // what it passed. So two tenants' domain metrics were not merely unsliceable,
 // they were THE SAME SERIES: same name, same labels, interleaving samples. A
 // two-tenant deploy did not get a coarse number, it got a meaningless one, while
-// README and CLAUDE.md advertised multi-tenancy. This makes the shipped claim
+// README.md and AGENTS.md advertised multi-tenancy. This makes the shipped claim
 // true.
 //
 // # Why it wraps the emitter, not the collectors

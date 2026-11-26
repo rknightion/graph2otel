@@ -4,7 +4,7 @@ package semconv
 // one entra.conditional_access_policy record per returned CA policy and one
 // entra.named_location record per returned named location, added alongside
 // the collector's existing bounded aggregate gauges (never replacing them —
-// see CLAUDE.md's "metrics carry aggregates, logs carry entities" rule).
+// see the cardinality rule in reference/telemetry-model.md).
 //
 // id, display_name, state, type, is_trusted, created_date_time and
 // last_modified_date_time are REUSED from attrs_shared.go / attrs_entra.go /

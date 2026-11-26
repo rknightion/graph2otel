@@ -103,7 +103,7 @@ func mapBlobRiskDetection(rec map[string]any) (telemetry.Event, bool) {
 // blobEventTime resolves the real event time from properties.detectedDateTime —
 // the same field the polled endpoint binds to (its TimeField) and sorts by.
 // Parsed as an instant; an unparseable timestamp drops the record rather than
-// mis-dating it (the emitter must never stamp arrival time — CLAUDE.md).
+// mis-dating it (see the emitter rule in AGENTS.md).
 func blobEventTime(props map[string]any) (time.Time, bool) {
 	raw := str(props, "detectedDateTime")
 	if raw == "" {
