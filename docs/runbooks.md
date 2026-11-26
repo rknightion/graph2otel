@@ -744,20 +744,26 @@ outcomes and OTLP delivery failures. Then check whether calls actually took plac
 This is upstream context, not an on-call page. Send `severity=info` and
 `category=teams-service-incident` to an informational receiver.
 
-**No data:** No recent open snapshot or retained resolution is not evidence of
-closure. Check the Teams profile, `m365.servicehealth` and the Loki feed.
+This rule reads the `m365.service_health.issues.total` gauge, filtered to
+`service="Microsoft Teams"`, `classification="incident"` and `is_resolved="false"`. The
+gauge is a snapshot each poll (15m), and resolution is the API's own `isResolved`. There
+is no closure lookup.
 
-**Evaluator error:** Check Loki's instant query, structured metadata and limits
-for the seven-day closure lookup and intermediate issue series.
+**No data:** An absent series means no open Teams incident in the latest poll, so the
+alert clears. It does not prove the collector ran: check the Teams profile,
+`m365.servicehealth` and Collector health.
 
-**False positives:** A backdated resolution can arrive or become queryable after
-the open snapshot. The latest status is not the row that arrived last. A retained
-confirmed resolution suppresses that tenant and issue even if an old open is replayed.
+**Evaluator error:** Check the Prometheus datasource and that the gauge carries the
+`service` and `is_resolved` labels (collector build from #760 or later). Before that, the
+query matches nothing and the alert stays silent.
 
-**Remediation:** Confirm the status in Microsoft 365 service health. Only an explicit
-resolution twin closes the matching issue in this query; it leaves any other open
-issues in the count. An alert can also clear when open evidence ages out, which is
-not a Microsoft resolution.
+**False positives:** The alert follows Microsoft's status, so it can lag a real recovery
+until the issue is marked resolved. An issue with no `isResolved` from the API is
+labelled `unknown` and is not counted.
+
+**Remediation:** Confirm the status in Microsoft 365 service health. The per-issue
+detail (title, impact, timeline) is in the `m365.service_health_issue` log twin and the
+Teams issue tables on the dashboard.
 
 ## Portable detections (all paused)
 

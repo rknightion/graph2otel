@@ -924,11 +924,12 @@ def _teams_share(numerator, eligible, dims, minimum):
             f'and on ({dims}) (({eligible}) >= {minimum})')
 
 
-def _teams_metric(suffix, title, expr, op, limit, category, description, scope=""):
+def _teams_metric(suffix, title, expr, op, limit, category, description, scope="",
+                  severity="warning"):
     where = "Tenant {{ $labels.tenant_id }}" + scope
     return _alert(
         f"g2o-teams-{suffix}", title, expr, op, [limit], "10m",
-        {"source": "m365", "severity": "warning", "category": category},
+        {"source": "m365", "severity": severity, "category": category},
         f"{where}: {title}.", description, True, instant=True,
     )
 
@@ -966,23 +967,12 @@ def _teams_stale():
 
 
 def _teams_open_incidents():
-    # Opens are repeated snapshots at poll time; closures are one-shot and
-    # backdated to the actual end. An explicit closure wins even if an old open
-    # snapshot arrived recently, and closes only the matching tenant and id.
-    # Do not filter resolutions out of the data from which state is computed.
-    dims = "tenant_id, id"
-    incident = (f("tenant_id", "ne", ""), f("id", "ne", ""),
-                f("service", "eq", "Microsoft Teams"), f("classification", "eq", "incident"))
-
-    def count_state(resolved, window):
-        selector = _sel("m365.service_health_issue", *incident,
-                        f("is_resolved", "eq", resolved), by=dims)
-        return _teams_log_count(selector, dims, window)
-
-    opens = count_state("false", "30m")
-    closed = count_state("true", "7d")
-    return (f"count by (tenant_id) (({opens}) unless on ({dims}) ({closed})) "
-            f"or on (tenant_id) (0 * count by (tenant_id) ({closed}))")
+    # A gauge snapshot each poll: the API's own isResolved decides, so there is
+    # no closure lookup. An issue with an absent isResolved is labelled
+    # "unknown" by the collector and is not counted here.
+    return (f'sum by (tenant_id) ({_m("m365.service_health.issues.total")}'
+            f'{{{_TEAMS_TENANT},service="Microsoft Teams",classification="incident",'
+            f'is_resolved="false"}})')
 
 
 def _teams_rules():
@@ -1057,15 +1047,14 @@ def _teams_rules():
             "Validate the Loki query, expected traffic, event delay and business hours "
             "for your tenant before enabling.", "15m",
         ),
-        _teams_loki(
+        _teams_metric(
             "service-incident-open", "Microsoft Teams service incident is open",
-            _teams_open_incidents(), "teams-service-incident", "info",
-            "A Teams incident was observed open in the last 30m with no confirmed "
-            "resolution twin for that tenant and issue in the last 7d. Advisories do not "
-            "count. Silence is unknown, not a confirmed closure. Send to an informational "
-            "receiver, not an on-call pager.",
-            "Verify open and resolution twins on the Teams profile, validate the Loki "
-            "query and set a separate informational route before enabling.", "0s",
+            _teams_open_incidents(), "gt", 0, "teams-service-incident",
+            "At least one Microsoft Teams incident is unresolved in the latest "
+            "service-health poll (is_resolved from the API). Advisories do not count. "
+            "The gauge is a snapshot each poll, so the alert clears when Microsoft "
+            "marks the issue resolved. Send to an informational receiver, not an "
+            "on-call pager.", severity="info",
         ),
     ]
 
@@ -2275,7 +2264,7 @@ DASHBOARD_TARGETS = {
     "g2o-teams-trunk-sip-5xx-high":
         ("M365", "Direct Routing attempt rate by trunk, outcome and SIP class"),
     "g2o-teams-call-records-stale": ("M365", "Teams calls by detail version"),
-    "g2o-teams-service-incident-open": ("M365", "Service health status ladder"),
+    "g2o-teams-service-incident-open": ("M365", "Service health issues total"),
     "g2o-detect-privileged-directory-change":
         ("Entra", "Top directory audit activities"),
     "g2o-detect-security-alert-unresolved":
@@ -2379,9 +2368,6 @@ def resolve_target(man: dict, tab: str, panel_title: str) -> tuple:
 # is not a gate. An unused entry here fails too, so a waiver cannot outlive the
 # panel that justified it.
 SIGNAL_MATCH_WAIVERS = {
-    "g2o-teams-service-incident-open":
-        "the existing M365 status ladder shows the service-level context; per-issue "
-        "lifecycle twins are in Loki and are not plotted on the merged board",
     "g2o-detect-security-alert-unresolved":
         "no panel plots the entra.security_alert stream; the Defender alert log "
         "panel (defender.alert) is the nearest investigation surface, and the "

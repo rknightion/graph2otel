@@ -105,7 +105,7 @@ class TestPipelineShape(unittest.TestCase):
             self.assertEqual(ref_ids, ["A", "B", "C"], r["uid"])
             self.assertEqual(r["condition"], "C", r["uid"])
             a, b, c = r["data"]
-            ds = r["uid"] in {"g2o-teams-call-records-stale", "g2o-teams-service-incident-open"}
+            ds = r["uid"] in {"g2o-teams-call-records-stale"}
             self.assertEqual(a["model"]["datasource"]["type"],
                              "loki" if ds else "prometheus", r["uid"])
             self.assertEqual(b["model"]["type"], "reduce", r["uid"])
@@ -113,6 +113,23 @@ class TestPipelineShape(unittest.TestCase):
             self.assertEqual(c["model"]["type"], "threshold", r["uid"])
             self.assertEqual(c["model"]["expression"], "B", r["uid"])
 
+
+
+class TestTeamsServiceIncidentRule(unittest.TestCase):
+    def test_is_prometheus_backed_on_the_resolved_state_gauge(self):
+        rule = next(r for r in build_rules.RULES if r["uid"] == "g2o-teams-service-incident-open")
+        query = rule["data"][0]
+        self.assertEqual(query["model"]["datasource"]["type"], "prometheus")
+        expr = query["model"]["expr"]
+        self.assertIn("m365_service_health_issues_total", expr)
+        for matcher in ('service="Microsoft Teams"', 'classification="incident"', 'is_resolved="false"'):
+            self.assertIn(matcher, expr)
+        self.assertIn("sum by (tenant_id)", expr)
+        self.assertNotIn("count_over_time", expr)
+        self.assertEqual(rule["data"][2]["model"]["conditions"][0]["evaluator"]["params"], [0])
+        self.assertEqual(rule["data"][2]["model"]["conditions"][0]["evaluator"]["type"], "gt")
+        self.assertEqual(rule["labels"]["severity"], "info")
+        self.assertEqual(rule["labels"]["category"], "teams-service-incident")
 
 
 class TestEvaluatorErrorState(unittest.TestCase):
@@ -934,7 +951,7 @@ class TestAppPlatformProjection(unittest.TestCase):
 
     def test_instant_loki_query_mode_matches_app_platform_readback(self):
         """Grafana returns the explicit non-default mode outside the model too."""
-        for uid in ("g2o-teams-call-records-stale", "g2o-teams-service-incident-open"):
+        for uid in ("g2o-teams-call-records-stale",):
             with self.subTest(uid=uid):
                 query = self._project(uid)["spec"]["expressions"]["A"]
                 self.assertEqual(query["queryType"], "instant")

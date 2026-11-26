@@ -4,9 +4,11 @@
       "Name": "m365.service_health.issues.total",
       "Unit": "{issue}",
       "Kind": "gauge",
-      "Description": "Count of M365 service-health issues by classification and status.",
+      "Description": "Count of M365 service-health issues by classification, status, service and resolved state.",
       "AttrKeys": [
         "classification",
+        "is_resolved",
+        "service",
         "status"
       ]
     },

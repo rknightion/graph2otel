@@ -31698,7 +31698,7 @@
         "spec": {
           "id": 379,
           "title": "Service health issues total",
-          "description": "Count of M365 service-health issues by classification and status.",
+          "description": "Count of M365 service-health issues by classification, status, service and resolved state.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -31722,11 +31722,11 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, classification, status) (m365_service_health_issues_total{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (tenant_id, classification, is_resolved, service, status) (m365_service_health_issues_total{tenant_id=~\"$tenant\"})",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{classification}} {{status}}"
+                        "legendFormat": "{{tenant_id}} {{classification}} {{is_resolved}} {{service}} {{status}}"
                       }
                     }
                   }

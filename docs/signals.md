@@ -51,6 +51,12 @@ style choice. See [the namespace rules](../reference/telemetry-model.md#namespac
   `> 3` for a live outage. There is deliberately no companion mapping metric — this
   table is the mapping. The per-issue detail (title/impact) is in the
   `m365.service_health_issue` log twin, never a metric label.
+- **`m365.service_health.issues.total{classification,status,service,is_resolved}`** (#760)
+  — issue counts. `service` is the issue's service display name (tens of values) and
+  `is_resolved` is `true` or `false` from the API's `isResolved`; an issue whose
+  `isResolved` is absent is `unknown`, never `false`, so an alert on
+  `is_resolved="false"` cannot count an issue whose state was not reported. The issue
+  id and title are never labels; they stay in the `m365.service_health_issue` log twin.
 - **`entra.gsa.onboarding_status` enum** (#239) — the Global Secure Access tenant
   onboarding state as a numeric ladder, the same shape as `service_health.status`:
   `0` = `onboarded`; `1` = in-progress (`onboardingInProgress`,

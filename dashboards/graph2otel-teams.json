@@ -22344,7 +22344,7 @@
         "spec": {
           "id": 126,
           "title": "Service issues by classification and status (all services)",
-          "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns.",
+          "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns. Summed across the service and resolved-state labels; the Teams panel above splits them.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -30506,6 +30506,96 @@
             }
           }
         }
+      },
+      "panel-4116": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4116,
+          "title": "Teams service issues over time",
+          "description": "Microsoft Teams service-health issues returned at each poll, by classification and resolved state. Resolved rows are the retained history the API returns, so the open series is the one to watch. A snapshot gauge, kept for the metric retention period; titles and impact are in the issue tables below. A missing isResolved shows as unknown, not false.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, classification, is_resolved) (m365_service_health_issues_total{tenant_id=~\"$tenant\",service=\"Microsoft Teams\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} \u00b7 {{classification}} \u00b7 resolved={{is_resolved}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -33145,6 +33235,19 @@
                                   "x": 0,
                                   "y": 8,
                                   "width": 24,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4116"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 16,
+                                  "width": 24,
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
@@ -33156,7 +33259,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 15,
+                                  "y": 23,
                                   "width": 24,
                                   "height": 7,
                                   "element": {
@@ -33169,7 +33272,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 22,
+                                  "y": 30,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -33182,7 +33285,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 31,
+                                  "y": 39,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -33195,7 +33298,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 40,
+                                  "y": 48,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -33208,7 +33311,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 49,
+                                  "y": 57,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -33221,7 +33324,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 58,
+                                  "y": 66,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -33234,7 +33337,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 58,
+                                  "y": 66,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
