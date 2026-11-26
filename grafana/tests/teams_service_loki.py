@@ -123,20 +123,20 @@ class TeamsIssueQueries(unittest.TestCase):
 
     def test_open_poll_counts_group_by_tenant_and_id_only(self):
         self.assertCountEqual(
-            [(labels, value) for labels, value in self.instant("Distinct Teams issues observed open in range")
-             if labels.get("g2o_measure") == "Polls seen open"],
-            [({"tenant_id": tenant, "id": issue_id, "g2o_measure": "Polls seen open"}, count)
+            [(labels, value) for labels, value in self.instant("Visible open observations by Teams issue")
+             if labels.get("g2o_measure") == "Returned open polls"],
+            [({"tenant_id": tenant, "id": issue_id, "g2o_measure": "Returned open polls"}, count)
              for tenant, issue_id, count in (("a", "X", 2), ("b", "X", 1), ("a", "Z", 2))],
         )
 
     def test_open_observation_bounds_exclude_resolutions_and_use_exact_identity(self):
-        rows = self.instant("Distinct Teams issues observed open in range")
+        rows = self.instant("Visible open observations by Teams issue")
         self.assertCountEqual(
             [(labels.get("tenant_id"), labels.get("id"), labels["g2o_measure"], value)
-             for labels, value in rows if labels.get("g2o_measure") in ("First observed open", "Last observed open")],
+             for labels, value in rows if labels.get("g2o_measure") in ("Earliest returned open", "Latest returned open")],
             [(tenant, issue_id, column, self.at // 1_000_000 + offset * 1000)
              for tenant, issue_id, first, last in (("a", "X", -50, -40), ("b", "X", -30, -30), ("a", "Z", -11, -11))
-             for column, offset in (("First observed open", first), ("Last observed open", last))],
+             for column, offset in (("Earliest returned open", first), ("Latest returned open", last))],
         )
 
     def test_latest_observation_keeps_one_real_record_per_issue_or_marks_a_tie(self):
@@ -171,15 +171,15 @@ class TeamsIssueQueries(unittest.TestCase):
 
 class TeamsExactSiteQueries(unittest.TestCase):
     def test_counts_one_population_without_using_the_recent_table_cap(self):
-        target = _query("Call evidence at the selected site")
+        target = _query("Visible call evidence at the selected site")
         self.assertEqual(target["queryType"], "instant")
         site = "Fixture / `?&=site"
         user = "fixture+caller@example.com"
         at = time.time_ns()
 
         def row(offset_ms, tenant="a", call_id="X", version="1", **changes):
-            fields = dict(event_name="teams.call_stream", tenant_id=tenant, call_id=call_id, version=version,
-                          caller_site=site, callee_user_principal_name=user, stream_id="one")
+            fields = {"event_name": "teams.call_stream", "tenant_id": tenant, "call_id": call_id,
+                      "version": version, "caller_site": site, "callee_user_principal_name": user, "stream_id": "one"}
             return [str(at + offset_ms * 1_000_000), f"Stored stream observation {offset_ms}", {**fields, **changes}]
 
         # More matching rows than the 250-row evidence table can show; these
@@ -207,7 +207,8 @@ class TeamsExactSiteQueries(unittest.TestCase):
 
             def expected(tenant, *values):
                 return [({"tenant_id": tenant, "g2o_measure": measure}, value) for measure, value in zip(
-                    ("Distinct call IDs", "Distinct call versions", "Matching stream observations"), values)]
+                    ("Returned distinct call IDs", "Returned distinct call versions", "Returned stream observations"),
+                    values)]
 
             self.assertCountEqual(counts(), [*expected("a", 2, 3, 253), *expected("ab", 1, 1, 1)])
             self.assertCountEqual(counts(tenant="a"), expected("a", 2, 3, 253))
@@ -232,7 +233,7 @@ class TeamsExactSiteQueries(unittest.TestCase):
             self.assertNotIn("call_id", unlabelled[0])
 
     def test_series_limit_returns_an_error_not_partial_counts(self):
-        target = _query("Call evidence at the selected site")
+        target = _query("Visible call evidence at the selected site")
         at = time.time_ns()
         with _loki("-querier.max-query-series=5") as request:
             entries = [[str(at - 1_000_000_000), f"Observation from {tenant}", {
@@ -246,8 +247,54 @@ class TeamsExactSiteQueries(unittest.TestCase):
                 self.assertIn(b"series (5) reached", error.read())
             counts = _instant(request, _interpolate(target, "a", site="Fixture site", user=""), at)
             self.assertCountEqual(counts, [({"tenant_id": "a", "g2o_measure": name}, 1) for name in (
-                "Distinct call IDs", "Distinct call versions", "Matching stream observations",
+                "Returned distinct call IDs", "Returned distinct call versions", "Returned stream observations",
             )])
+
+
+class TeamsVisibleEvidenceLookback(unittest.TestCase):
+    def test_silently_shortened_range_only_claims_returned_evidence(self):
+        panels = {element['spec']['id']: element['spec']
+                  for element in json.loads(DASHBOARD.read_text())['spec']['elements'].values()}
+        issue, site = panels[122], panels[1042]
+        with _loki('-querier.max-query-lookback=35s') as request:
+            at = time.time_ns() // 1_000_000 * 1_000_000
+            entries = []
+            for tenant, offset, version in (('a', -50, '1'), ('a', -5, '2'), ('older', -50, '1')):
+                stamp = str(at + offset * 1_000_000_000)
+                entries.extend([
+                    [stamp, f'Issue {tenant} {version}', {'tenant_id': tenant, 'id': 'X', 'service': 'Microsoft Teams',
+                        'event_name': 'm365.service_health_issue', 'is_resolved': 'false'}],
+                    [stamp, f'Stream {tenant} {version}', {'tenant_id': tenant, 'call_id': 'X', 'version': version,
+                        'event_name': 'teams.call_stream', 'caller_site': 'Fixture site'}],
+                ])
+            request('/loki/api/v1/push', {'streams': [{'stream': {'service_name': 'graph2otel'}, 'values': entries}]})
+
+            def read(panel, tenant):
+                expr = _interpolate(_query(panel['title']), tenant, site='Fixture site', user='')
+                path = '/loki/api/v1/query?' + urlencode({'query': expr, 'time': str(at)})
+                payload = json.loads(request(path))
+                self.assertEqual(payload['status'], 'success')
+                self.assertFalse(payload.get('warnings'))
+                return {entry['metric']['g2o_measure']: float(entry['value'][1]) for entry in payload['data']['result']}
+
+            # An older-only tenant has no returned evidence, not zero activity.
+            self.assertFalse(read(issue, 'older'))
+            self.assertFalse(read(site, 'older'))
+            issue_values, site_values = read(issue, 'a'), read(site, 'a')
+            opened = (at - 5_000_000_000) / 1_000_000
+            self.assertCountEqual(list(issue_values.values()), [1, opened, opened])
+            self.assertCountEqual(list(site_values.values()), [1, 1, 1])
+            # Nothing in either API response reveals the clipping. The
+            # generated labels and empty states must carry the qualification.
+            for panel in (issue, site):
+                self.assertIn('silently shorten', panel['description'])
+                no_value = panel['vizConfig']['spec']['fieldConfig']['defaults']['noValue']
+                self.assertIn('returned', no_value)
+                self.assertIn('not proof', no_value)
+            self.assertEqual(issue_values, {'Returned open polls': 1, 'Earliest returned open': opened,
+                                           'Latest returned open': opened})
+            self.assertEqual(site_values, {'Returned distinct call IDs': 1, 'Returned distinct call versions': 1,
+                                          'Returned stream observations': 1})
 
 
 class TeamsNavigationEvidenceQueries(unittest.TestCase):

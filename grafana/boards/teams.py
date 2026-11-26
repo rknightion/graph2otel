@@ -631,6 +631,8 @@ def _log_measure_table(b, title, identity, measures, desc, empty, *, h=5, panel_
     # label names the value column, not another part of the identity.
     expr = " or ".join(f'label_replace({expr}, "g2o_measure", "{name}", "g2o_measure", "^$")'
                        for name, expr, _ in measures)
+    desc += (" Loki can silently shorten the requested time range. This table covers only evidence Loki returns; "
+             "choose a shorter range or fewer tenants if the query reports a limit.")
     panel = b._viz_panel("table", title, [], "short", desc + _loki_note(), 24, h, panel_id=panel_id)
     panel["datasource"] = LOKI_DS
     panel["targets"] = [b._loki_query(expr, query_type="instant")]
@@ -666,17 +668,16 @@ def _site_call_evidence(b, site_filters):
     ], by=list(version_key))
     versions = f"sum by ({group}) (count_over_time({streams} [$__range]))"
     calls = f"count by (tenant_id, call_id) ({versions})"
-    _log_measure_table(b, "Call evidence at the selected site", ("tenant_id",), (
-        ("Distinct call IDs", f"count by (tenant_id) ({calls})", "short"),
-        ("Distinct call versions", f"count by (tenant_id) ({versions})", "short"),
-        ("Matching stream observations", f"sum by (tenant_id) ({versions})", "short"),
-    ), "Counts stored stream rows by stream start in the selected range, not the capped table below. "
+    _log_measure_table(b, "Visible call evidence at the selected site", ("tenant_id",), (
+        ("Returned distinct call IDs", f"count by (tenant_id) ({calls})", "short"),
+        ("Returned distinct call versions", f"count by (tenant_id) ({versions})", "short"),
+        ("Returned stream observations", f"sum by (tenant_id) ({versions})", "short"),
+    ), "Counts the matching stream rows Loki returns, by stream start, not the capped table below. "
        "Every counted row has the exact site on either side and has a tenant, call ID and version. "
        "The optional user can match either side of that same row. Versions are distinct per call and tenant. "
        "Repeated observations count as rows, not as new versions, distinct streams or people. This is not a census "
-       "of all calls at the site. Rows without a tenant or version can still appear below. "
-       "If Loki reports a limit, narrow the range or select one tenant; do not infer totals from the recent rows.",
-       "Enter a named site. No matching stream observations with a tenant, call ID and version in this range.",
+       "of all calls at the site. Rows without a tenant or version can still appear below.",
+       "Enter a named site. No keyed stream evidence returned; this is not proof of zero activity.",
        panel_id=1042)
 
 
@@ -1321,15 +1322,14 @@ def issues(b):
     open_ms = b._selector(ISSUE, filters=[*open_key, Raw(
         "label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms",
         keys=identity, reason="Use the stored open observation time, not the issue's start or last modified date")])
-    _log_measure_table(b, "Distinct Teams issues observed open in range", identity, (
-        ("Polls seen open", f"sum by ({key}) (count_over_time({open_only} [$__range]))", "short"),
-        ("First observed open", f"min_over_time({open_ms} [$__range]) by ({key})", "dateTimeAsIso"),
-        ("Last observed open", f"max_over_time({open_ms} [$__range]) by ({key})", "dateTimeAsIso"),
-    ), "One row per exact tenant and issue ID. Counts and dates use stored open observations in the selected "
-       "range, on the poll clock. They do not show issue start, resolution or whether it is still open. "
-       "Rows without a tenant or issue ID remain in history. If Loki reports a limit, narrow the range or "
-       "select one tenant; the recent history is not a substitute for this summary.",
-       "No keyed Teams issues were observed open in this range. Check the Loki datasource and service-health collector.",
+    _log_measure_table(b, "Visible open observations by Teams issue", identity, (
+        ("Returned open polls", f"sum by ({key}) (count_over_time({open_only} [$__range]))", "short"),
+        ("Earliest returned open", f"min_over_time({open_ms} [$__range]) by ({key})", "dateTimeAsIso"),
+        ("Latest returned open", f"max_over_time({open_ms} [$__range]) by ({key})", "dateTimeAsIso"),
+    ), "One row per exact tenant and issue ID. Counts and dates use the open observations Loki returns, on the "
+       "poll clock. They do not show issue start, resolution or whether it is still open. "
+       "Rows without a tenant or issue ID remain in history.",
+       "No keyed open observations returned; this is not proof that no issues were open.",
        h=7)
     fields = (*identity, "title", "status", "classification", "is_resolved")
     grouped = ", ".join(fields)
