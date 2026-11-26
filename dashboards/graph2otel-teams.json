@@ -1430,6 +1430,66 @@
                         }
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Observed"
+                    },
+                    "properties": [
+                      {
+                        "id": "decimals",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Classified"
+                    },
+                    "properties": [
+                      {
+                        "id": "decimals",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Good"
+                    },
+                    "properties": [
+                      {
+                        "id": "decimals",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Poor"
+                    },
+                    "properties": [
+                      {
+                        "id": "decimals",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Unclassified"
+                    },
+                    "properties": [
+                      {
+                        "id": "decimals",
+                        "value": 0
+                      }
+                    ]
                   }
                 ]
               }
@@ -5033,7 +5093,8 @@
                         "g2o_scope": true
                       },
                       "renameByName": {
-                        "Value #A": "Preset result (0 = missed)"
+                        "Value #A": "Preset result (0 = missed)",
+                        "Value": "Preset result (0 = missed)"
                       },
                       "indexByName": {
                         "tenant_id": 0,
@@ -23788,7 +23849,13 @@
                   ],
                   "countRows": false,
                   "enablePagination": true
-                }
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Collector",
+                    "desc": false
+                  }
+                ]
               },
               "fieldConfig": {
                 "defaults": {
