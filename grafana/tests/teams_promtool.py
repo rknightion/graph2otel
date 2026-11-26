@@ -145,6 +145,25 @@ def stale_scenarios(uid, doc_rule):
     out.append(scenario(6 * 24 + 20, {"fixture-stale": stopped(6 * 24 + 20, 8)}, []))
     # A tenant whose counter never existed does not alert.
     out.append(scenario(wednesday, {}, []))
+
+    # A call with a new label combination creates its series at its first
+    # value, so increase() reads 0 on it. Such an arrival is still an arrival.
+    def labelled(tenant, health, values):
+        return {"series": f'teams_calls_total{{tenant_id="{tenant}",call_health="{health}"}}',
+                "values": values}
+
+    def appears(eval_hours, age_hours):
+        # absent until age_hours before the evaluation, then flat at 1
+        return f"_x{steps(eval_hours - age_hours)} 1x{steps(age_hours + 24)}"
+
+    out.append({"interval": "5m", "input_series": [
+        # stopped 8h ago on one series, but a new series appeared 1h ago
+        labelled("fixture-new-recent", "good", stopped(wednesday, 8)),
+        labelled("fixture-new-recent", "poor", appears(wednesday, 1)),
+        # the only arrival in 12h was a new series 8h ago: stale
+        labelled("fixture-new-old", "poor", appears(wednesday, 8)),
+    ], "alert_rule_test": [{"eval_time": f"{wednesday}h", "alertname": uid, "exp_alerts": [
+        {"exp_labels": {"tenant_id": "fixture-new-old"} | doc_rule["labels"]}]}]})
     return out
 
 

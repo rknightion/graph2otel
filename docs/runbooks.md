@@ -745,7 +745,9 @@ OTLP delivery; the freshness rule does not monitor those paths.
 
 **False positives:** Quiet afternoons and holidays can look stale. It takes
 arrivals within 12 hours and none within four hours to trigger the query. A
-process restart resets the counter series; it reappears at the next call.
+process restart resets the counter series; it reappears at the next call. An
+arrival also counts when it creates a new counter series, because a new label
+combination starts at its first value and `increase()` reads that as zero.
 
 **Remediation:** Compare recent arrivals with the collector watermark, scrape
 outcomes and OTLP delivery failures. Then check whether calls actually took place.

@@ -938,16 +938,26 @@ def _teams_metric(suffix, title, expr, op, limit, category, description, scope="
 def _teams_stale():
     # Arrival-based: teams_calls_total increments when the collector first sees
     # a complete call version. The long leg is positive evidence that this
-    # tenant had arrivals; the short leg removes tenants with a recent one. Both
-    # legs keep only a positive increase, because an existing counter that has
-    # stopped moving reports 0, not no data. A tenant whose counter series never
-    # existed yields no result at all, so it stays quiet. The gate is UTC
-    # Monday to Friday, 12:00 up to 18:00 (four hours into an 08:00 workday).
-    seen = _teams_growth("teams.calls", "tenant_id", "", "12h")
-    fresh = _teams_growth("teams.calls", "tenant_id", "", "4h")
+    # tenant had arrivals; the short leg removes tenants with a recent one. An
+    # arrival shows as either a positive increase on an existing series, or a
+    # series that exists now and did not exist one window ago: a new label
+    # combination is exported first with its first value, so increase() reads
+    # it as 0. An existing counter that has stopped moving also reads 0, which
+    # is why each leg keeps only positive evidence. A tenant whose counter
+    # series never existed yields no result at all, so it stays quiet. The gate
+    # is UTC Monday to Friday, 12:00 up to 18:00 (four hours into an 08:00
+    # workday).
+    calls = f'{_m("teams.calls")}{{{_TEAMS_TENANT}}}'
+
+    def arrived(window):
+        grown = _teams_growth("teams.calls", "tenant_id", "", window)
+        created = f"count by (tenant_id) ({calls} unless {calls} offset {window})"
+        return f"(({grown}) > 0 or {created})"
+
     gate = ("day_of_week() >= 1 and day_of_week() <= 5 "
             "and hour() >= 12 and hour() < 18")
-    return f"(({seen}) > 0 unless on (tenant_id) (({fresh}) > 0)) and on () ({gate})"
+    return (f"({arrived('12h')} unless on (tenant_id) {arrived('4h')}) "
+            f"and on () ({gate})")
 
 
 def _teams_open_incidents():
