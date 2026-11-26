@@ -18420,6 +18420,4985 @@
             }
           }
         }
+      },
+      "panel-4101": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4101,
+          "title": "Network regions",
+          "description": "Latest record per Teams network region.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.network_region` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, network_region_identity, network_region_description, network_region_central_site, network_region_authority",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "network_region_identity": {
+                          "operation": "groupby"
+                        },
+                        "network_region_description": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_region_central_site": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_region_authority": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Identity",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.network_region records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_region_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_region_description (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_region_central_site (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Central site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_region_authority (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Authority"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4102": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4102,
+          "title": "Network sites",
+          "description": "Latest record per Teams network site.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.network_site` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, network_site_identity, network_site_network_region_id, network_site_description, network_site_enable_location_based_routing, network_site_location_policy, network_site_emergency_call_routing_policy, network_site_emergency_calling_policy, network_site_network_roaming_policy, network_site_site_address, network_site_authority",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "network_site_identity": {
+                          "operation": "groupby"
+                        },
+                        "network_site_network_region_id": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_description": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_enable_location_based_routing": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_location_policy": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_emergency_call_routing_policy": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_emergency_calling_policy": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_network_roaming_policy": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_site_address": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_site_authority": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Identity",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.network_site records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_network_region_id (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Region"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_description (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_enable_location_based_routing (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Location-based routing"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_location_policy (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Location policy"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_emergency_call_routing_policy (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Emergency call routing policy"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_emergency_calling_policy (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Emergency calling policy"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_network_roaming_policy (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Network roaming policy"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_site_address (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Site address"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_site_authority (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Authority"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4103": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4103,
+          "title": "Network subnets",
+          "description": "Latest record per Teams network subnet, with its sites CSV coverage.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.network_subnet` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, network_subnet_identity, network_subnet_cidr, network_subnet_network_site_id, network_subnet_description, network_subnet_csv_coverage, network_subnet_csv_site, network_subnet_authority",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "network_subnet_identity": {
+                          "operation": "groupby"
+                        },
+                        "network_subnet_cidr": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_subnet_network_site_id": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_subnet_description": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_subnet_csv_coverage": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_subnet_csv_site": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "network_subnet_authority": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Identity",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.network_subnet records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_cidr (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "CIDR"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_network_site_id (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Network site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_description (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_csv_coverage (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Sites CSV coverage"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_csv_coverage (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_csv_site (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Sites CSV site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "network_subnet_authority (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Authority"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4104": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4104,
+          "title": "Direct Routing gateways",
+          "description": "Latest record per PSTN gateway (session border controller).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.pstn_gateway` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, pstn_gateway_identity, pstn_gateway_fqdn, pstn_gateway_enabled, pstn_gateway_sip_signaling_port, pstn_gateway_max_concurrent_sessions, pstn_gateway_media_bypass, pstn_gateway_bypass_mode, pstn_gateway_send_sip_options, pstn_gateway_failover_time_seconds, pstn_gateway_gateway_site_id, pstn_gateway_proxy_sbc, pstn_gateway_description, pstn_gateway_authority",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "pstn_gateway_identity": {
+                          "operation": "groupby"
+                        },
+                        "pstn_gateway_fqdn": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_enabled": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_sip_signaling_port": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_max_concurrent_sessions": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_media_bypass": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_bypass_mode": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_send_sip_options": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_failover_time_seconds": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_gateway_site_id": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_proxy_sbc": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_description": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "pstn_gateway_authority": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Identity",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.pstn_gateway records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_fqdn (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "FQDN"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_enabled (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Enabled"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_enabled (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_sip_signaling_port (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "SIP port"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_max_concurrent_sessions (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Max concurrent sessions"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_media_bypass (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Media bypass"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_bypass_mode (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Bypass mode"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_send_sip_options (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "SIP OPTIONS"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_failover_time_seconds (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Failover time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_failover_time_seconds (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_gateway_site_id (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Gateway site"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_proxy_sbc (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Proxy SBC"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_description (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "pstn_gateway_authority (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Authority"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4105": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4105,
+          "title": "SIP devices configuration",
+          "description": "Latest SIP devices configuration record.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.sip_devices_configuration` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, sip_devices_identity, sip_devices_bulk_sign_in, sip_devices_authority",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "sip_devices_identity": {
+                          "operation": "groupby"
+                        },
+                        "sip_devices_bulk_sign_in": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "sip_devices_authority": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Identity",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.sip_devices_configuration records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "sip_devices_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "sip_devices_bulk_sign_in (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Bulk sign in"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "sip_devices_authority (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Authority"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4106": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4106,
+          "title": "IP phone policies",
+          "description": "Latest record per Teams IP phone policy.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.ip_phone_policy` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, ip_phone_policy_identity, ip_phone_policy_description, ip_phone_policy_sign_in_mode, ip_phone_policy_search_on_common_area_phone_mode, ip_phone_policy_allow_home_screen, ip_phone_policy_allow_better_together, ip_phone_policy_allow_hot_desking, ip_phone_policy_hot_desking_idle_timeout_in_minutes, ip_phone_policy_authority",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "ip_phone_policy_identity": {
+                          "operation": "groupby"
+                        },
+                        "ip_phone_policy_description": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_sign_in_mode": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_search_on_common_area_phone_mode": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_allow_home_screen": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_allow_better_together": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_allow_hot_desking": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_hot_desking_idle_timeout_in_minutes": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "ip_phone_policy_authority": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Identity",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.ip_phone_policy records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_identity"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Identity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_description (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_sign_in_mode (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Sign in mode"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_search_on_common_area_phone_mode (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Common area phone search"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_allow_home_screen (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Allow home screen"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_allow_better_together (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Allow better together"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_allow_hot_desking (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Allow hot desking"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_hot_desking_idle_timeout_in_minutes (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Hot desking idle timeout (min)"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ip_phone_policy_authority (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Authority"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4107": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4107,
+          "title": "Auto attendants",
+          "description": "Latest configuration per auto attendant.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.auto_attendant` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, auto_attendant_id, auto_attendant_name, auto_attendant_status, auto_attendant_language_id, auto_attendant_time_zone_id, auto_attendant_voice_response_enabled, auto_attendant_operator_type, auto_attendant_schedule_count, auto_attendant_call_flow_count, auto_attendant_application_instances",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "auto_attendant_id": {
+                          "operation": "groupby"
+                        },
+                        "auto_attendant_name": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_status": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_language_id": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_time_zone_id": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_voice_response_enabled": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_operator_type": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_schedule_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_call_flow_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "auto_attendant_application_instances": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Name",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.auto_attendant records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Auto attendant ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_name (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Name"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_status (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Status"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_status (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "good": {
+                                "color": "green",
+                                "index": 0
+                              },
+                              "success": {
+                                "color": "green",
+                                "index": 1
+                              },
+                              "resolved": {
+                                "color": "green",
+                                "index": 2
+                              },
+                              "serviceOperational": {
+                                "color": "green",
+                                "index": 3
+                              },
+                              "true": {
+                                "color": "green",
+                                "index": 4
+                              },
+                              "covered": {
+                                "color": "green",
+                                "index": 5
+                              },
+                              "poor": {
+                                "color": "red",
+                                "index": 6
+                              },
+                              "failed": {
+                                "color": "red",
+                                "index": 7
+                              },
+                              "failure": {
+                                "color": "red",
+                                "index": 8
+                              },
+                              "degraded": {
+                                "color": "red",
+                                "index": 9
+                              },
+                              "serviceDegradation": {
+                                "color": "red",
+                                "index": 10
+                              },
+                              "serviceInterruption": {
+                                "color": "red",
+                                "index": 11
+                              },
+                              "uncovered": {
+                                "color": "red",
+                                "index": 12
+                              },
+                              "unknown": {
+                                "color": "gray",
+                                "index": 13
+                              },
+                              "other": {
+                                "color": "gray",
+                                "index": 14
+                              },
+                              "unclassified": {
+                                "color": "gray",
+                                "index": 15
+                              },
+                              "answered": {
+                                "color": "green",
+                                "index": 16
+                              },
+                              "abandoned": {
+                                "color": "red",
+                                "index": 17
+                              },
+                              "false": {
+                                "color": "gray",
+                                "index": 18
+                              },
+                              "Enabled": {
+                                "color": "green",
+                                "index": 19
+                              },
+                              "Disabled": {
+                                "color": "gray",
+                                "index": 20
+                              },
+                              "active": {
+                                "color": "green",
+                                "index": 21
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_language_id (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Language ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_time_zone_id (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Time zone ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_voice_response_enabled (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Voice response enabled"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_operator_type (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Operator type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_schedule_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Schedule count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_call_flow_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call flow count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "auto_attendant_application_instances (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Application instances"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4108": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4108,
+          "title": "Call queues",
+          "description": "Latest configuration per call queue.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call_queue` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, call_queue_id, call_queue_name, call_queue_routing_method, call_queue_agent_alert_time_seconds, call_queue_overflow_threshold, call_queue_overflow_action, call_queue_timeout_threshold_seconds, call_queue_timeout_action, call_queue_no_agent_action, call_queue_presence_aware_routing, call_queue_allow_opt_out, call_queue_conference_mode, call_queue_agent_opt_in_count, call_queue_is_callback_enabled, call_queue_application_instances",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "call_queue_id": {
+                          "operation": "groupby"
+                        },
+                        "call_queue_name": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_routing_method": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_agent_alert_time_seconds": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_overflow_threshold": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_overflow_action": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_timeout_threshold_seconds": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_timeout_action": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_no_agent_action": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_presence_aware_routing": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_allow_opt_out": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_conference_mode": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_agent_opt_in_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_is_callback_enabled": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_queue_application_instances": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Name",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.call_queue records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call queue ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_name (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Name"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_routing_method (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Routing method"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_alert_time_seconds (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Agent alert time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_alert_time_seconds (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_overflow_threshold (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Overflow threshold"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_overflow_action (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Overflow action"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_timeout_threshold_seconds (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Timeout threshold"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_timeout_threshold_seconds (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_timeout_action (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Timeout action"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_no_agent_action (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "No agent action"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_presence_aware_routing (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Presence aware routing"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_allow_opt_out (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Allow opt out"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_conference_mode (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Conference mode"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_agent_opt_in_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Agent opt in count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_is_callback_enabled (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Callback enabled"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_application_instances (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Application instances"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4109": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4109,
+          "title": "Call queue diagnostics",
+          "description": "Latest count per call queue export diagnostic level and message. The diagnostics are not attributed to a queue.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call_queue_diagnostic` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, call_queue_diagnostic_level, call_queue_diagnostic_message, call_queue_diagnostic_count",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "call_queue_diagnostic_level": {
+                          "operation": "groupby"
+                        },
+                        "call_queue_diagnostic_message": {
+                          "operation": "groupby"
+                        },
+                        "call_queue_diagnostic_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Level",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No teams.call_queue_diagnostic records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_diagnostic_level"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Level"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_diagnostic_level"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "warning": {
+                                "color": "orange",
+                                "index": 20
+                              },
+                              "error": {
+                                "color": "red",
+                                "index": 21
+                              },
+                              "info": {
+                                "color": "blue",
+                                "index": 22
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_diagnostic_message"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Message"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_queue_diagnostic_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Count (latest poll)"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4110": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4110,
+          "title": "Teams",
+          "description": "Latest record per team.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.team` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, id, display_name, visibility, owners_count, members_count, guests_count, is_archived",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "id": {
+                          "operation": "groupby"
+                        },
+                        "display_name": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "visibility": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "owners_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "members_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "guests_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "is_archived": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Display name",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No m365.team records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Team ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "display_name (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Display name"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "visibility (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Visibility"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "owners_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Owners count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "members_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Members count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "guests_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Guests count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "is_archived (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Is archived"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4111": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4111,
+          "title": "Team channels",
+          "description": "Latest record per team channel.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.team_channel` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, team_id, id, team_display_name, display_name, membership_type, is_archived",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "team_id": {
+                          "operation": "groupby"
+                        },
+                        "id": {
+                          "operation": "groupby"
+                        },
+                        "team_display_name": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "display_name": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "membership_type": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "is_archived": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Team",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No m365.team_channel records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "team_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Team ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Channel ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "team_display_name (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Team"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "display_name (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Channel"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "membership_type (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Membership type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "is_archived (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Is archived"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4112": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4112,
+          "title": "Collaboration activity by user",
+          "description": "Latest report row per user and workload.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.collaboration_activity_user` | tenant_id=~\"$tenant\" | tenant_id!=`` | keep tenant_id, user_principal_name, workload, report_refresh_date, report_period, last_activity_date, team_chat_message_count, private_chat_message_count, call_count, meetings_organized_count, meetings_attended_count, files_shared_internally_count, files_shared_externally_count, is_deleted",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "user_principal_name": {
+                          "operation": "groupby"
+                        },
+                        "workload": {
+                          "operation": "groupby"
+                        },
+                        "report_refresh_date": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "report_period": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "last_activity_date": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "team_chat_message_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "private_chat_message_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "call_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "meetings_organized_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "meetings_attended_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "files_shared_internally_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "files_shared_externally_count": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "is_deleted": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "UPN",
+                    "desc": false
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No m365.collaboration_activity_user records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "UPN"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "workload"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Workload"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "report_refresh_date (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Report refresh date"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "report_period (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Report period"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_activity_date (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last activity date"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "team_chat_message_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Team chat message count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "private_chat_message_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Private chat message count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "call_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Call count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "meetings_organized_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Meetings organized count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "meetings_attended_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Meetings attended count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "files_shared_internally_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Files shared internally count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "files_shared_externally_count (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Files shared externally count"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "is_deleted (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Is deleted"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "user_principal_name"
+                    },
+                    "properties": [
+                      {
+                        "id": "links",
+                        "value": [
+                          {
+                            "title": "Open Users",
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4113": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4113,
+          "title": "Teams message center posts",
+          "description": "Latest record per message center post whose services include Teams.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.service_message` | tenant_id=~\"$tenant\" | tenant_id!=`` | services=~`(?i).*teams.*` | keep tenant_id, id, title, category, severity, is_major_change, services, start_date_time, end_date_time, action_required_by_date_time, last_modified_date_time",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 1000
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "groupBy",
+                  "spec": {
+                    "options": {
+                      "fields": {
+                        "tenant_id": {
+                          "operation": "groupby"
+                        },
+                        "Time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "max"
+                          ]
+                        },
+                        "id": {
+                          "operation": "groupby"
+                        },
+                        "title": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "category": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "severity": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "is_major_change": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "services": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "start_date_time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "end_date_time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "action_required_by_date_time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        },
+                        "last_modified_date_time": {
+                          "operation": "aggregate",
+                          "aggregations": [
+                            "first"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Last observed",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No m365.service_message records in range. Collector health shows whether the source ran.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last observed"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time (max)"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Message ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "title (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Title"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "category (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Category"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "severity (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Severity"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "severity (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "critical": {
+                                "color": "red",
+                                "index": 0
+                              },
+                              "high": {
+                                "color": "orange",
+                                "index": 1
+                              },
+                              "normal": {
+                                "color": "gray",
+                                "index": 2
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "is_major_change (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Is major change"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "services (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Services"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "start_date_time (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Start date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "end_date_time (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "End date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "action_required_by_date_time (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Action required by date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "last_modified_date_time (first)"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last modified date time"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4114": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4114,
+          "title": "Service health issue posts",
+          "description": "Posts on service health issues (all services). Match the issue ID to the Teams issue tables above.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.service_health_post` | tenant_id=~\"$tenant\" | keep tenant_id, issue_id, post_type, content_type, description, body_truncated",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 500
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "countRows": false,
+                  "enablePagination": true
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Time",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "noValue": "No data yet. No service health posts in range.",
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tenant_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "labels"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Line"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "id"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "tsNs"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "labelTypes"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hidden",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "issue_id"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Issue ID"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "post_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Post type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "content_type"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Content type"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "description"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Description"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "body_truncated"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Truncated"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-4115": {
+        "kind": "Panel",
+        "spec": {
+          "id": 4115,
+          "title": "Detected licence tiers",
+          "description": "Premium Microsoft Entra/Intune capabilities graph2otel detected per tier. No series means no premium tier was detected.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "max by (tier) (graph2otel_tenant_license_tier_ratio{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tier}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value_and_name",
+                "justifyMode": "auto",
+                "orientation": "horizontal"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "gray",
+                        "value": null
+                      },
+                      {
+                        "color": "green",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "unit": "short",
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "noValue": "No premium tier detected",
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "1": {
+                          "text": "Detected",
+                          "color": "green",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ]
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -19314,6 +24293,86 @@
           {
             "kind": "TabsLayoutTab",
             "spec": {
+              "title": "Network topology",
+              "layout": {
+                "kind": "RowsLayout",
+                "spec": {
+                  "rows": [
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "",
+                        "collapse": false,
+                        "hideHeader": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 24,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-107"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 8,
+                                  "width": 24,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4101"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 16,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4102"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 25,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4103"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "kind": "TabsLayoutTab",
+            "spec": {
               "title": "Calls",
               "layout": {
                 "kind": "RowsLayout",
@@ -19908,7 +24967,7 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "",
+                        "title": "Queues and attendants",
                         "collapse": false,
                         "layout": {
                           "kind": "GridLayout",
@@ -20073,7 +25132,61 @@
                             ]
                           }
                         },
-                        "hideHeader": true
+                        "hideHeader": false
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Configuration",
+                        "collapse": false,
+                        "hideHeader": false,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4107"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 9,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4108"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 18,
+                                  "width": 24,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4109"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
                       }
                     }
                   ]
@@ -20343,7 +25456,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-107"
+                                    "name": "panel-108"
                                   }
                                 }
                               },
@@ -20352,11 +25465,37 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 11,
-                                  "width": 12,
-                                  "height": 8,
+                                  "width": 24,
+                                  "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-108"
+                                    "name": "panel-4104"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 20,
+                                  "width": 12,
+                                  "height": 6,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4105"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 26,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4106"
                                   }
                                 }
                               }
@@ -20569,6 +25708,45 @@
                                     "name": "panel-1040"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 59,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4110"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 68,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4111"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 77,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4112"
+                                  }
+                                }
                               }
                             ]
                           }
@@ -20701,6 +25879,32 @@
                                     "name": "panel-127"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 48,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4113"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 57,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4114"
+                                  }
+                                }
                               }
                             ]
                           }
@@ -20818,6 +26022,19 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-133"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 37,
+                                  "width": 24,
+                                  "height": 5,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-4115"
                                   }
                                 }
                               }
