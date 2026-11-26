@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
@@ -911,8 +912,8 @@ func TestBuildFirstURLPathMatchesConfigAndClassifiesWorkload(t *testing.T) {
 	}
 }
 
-// TestPollStampsGraphTransport pins that every record this engine emits names
-// the transport that produced it (#141).
+// The collector's declared transport (read by admin and scheduler) must
+// agree with the transport on its emitted records.
 //
 // The engine stamps for itself rather than leaning on the Scheduler's "graph"
 // baseline, even though the baseline would produce the same value today. Two
@@ -920,7 +921,7 @@ func TestBuildFirstURLPathMatchesConfigAndClassifiesWorkload(t *testing.T) {
 // not by tracing back through the composition root), and the value stops
 // depending on a default set two packages away that nothing here would notice
 // changing.
-func TestPollStampsGraphTransport(t *testing.T) {
+func TestLogCollectorReportsAndStampsGraphTransport(t *testing.T) {
 	rec := telemetrytest.New()
 	cfg := EndpointConfig{
 		Path:            "/auditLogs/signIns",
@@ -938,15 +939,20 @@ func TestPollStampsGraphTransport(t *testing.T) {
 		}, "", nil
 	})
 
-	if _, err := Poll(context.Background(), cfg, newCheckpoint("t1", cfg.Path), from, to, fetcher, rec.Emitter(), nil); err != nil {
-		t.Fatalf("Poll: %v", err)
+	c := NewLogCollector("test.window", time.Minute, 0, "t1", cfg, fetcher, checkpoint.NewStore(t.TempDir()))
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
 	}
 
 	logs := rec.LogRecords()
 	if len(logs) != 1 {
 		t.Fatalf("got %d log records, want 1", len(logs))
 	}
-	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportGraph) {
-		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportGraph)
+	got := logs[0].Attrs[semconv.AttrIngestTransport]
+	if got != "graph" {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, "graph")
+	}
+	if declared := string(collector.TransportOf(c)); declared != got {
+		t.Errorf("declared transport = %q, emitted %q", declared, got)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -604,30 +605,35 @@ func TestPollReturnsDegradedErrorWhenTheCursorSaveFails(t *testing.T) {
 	}
 }
 
-// TestPollStampsBlobTransport pins that every record this engine emits names
-// the transport that produced it (#141).
+// The collector's declared transport (read by admin and scheduler) must
+// agree with the transport on its emitted records.
 //
 // This is the sharp case the attribute exists for. A blob-ingested sign-in and
 // a Graph-polled one are byte-identical by design — one shared mapper, on
 // purpose — so this stamp is the ONLY thing that tells an operator which lane a
 // record arrived by, and the only way to attribute a duplicate to #138's
 // at-least-once delivery rather than to both transports running at once.
-func TestPollStampsBlobTransport(t *testing.T) {
+func TestBlobCollectorReportsAndStampsBlobTransport(t *testing.T) {
 	src := &fakeSource{blobs: map[string]string{
 		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": rec("a"),
 	}}
+	c := newTestCollector(t, src)
 	r := telemetrytest.New()
 
-	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
-		t.Fatalf("Poll: %v", err)
+	if err := c.Collect(context.Background(), r.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
 	}
 
 	logs := r.LogRecords()
 	if len(logs) != 1 {
 		t.Fatalf("got %d log records, want 1", len(logs))
 	}
-	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportBlob) {
-		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportBlob)
+	got := logs[0].Attrs[semconv.AttrIngestTransport]
+	if got != "blob" {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, "blob")
+	}
+	if declared := string(collector.TransportOf(c)); declared != got {
+		t.Errorf("declared transport = %q, emitted %q", declared, got)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -999,9 +1000,9 @@ func TestCollectToleratesAnAlreadyEnabledSubscription(t *testing.T) {
 	}
 }
 
-// TestCollectStampsO365ActivityTransport pins that every record this engine
-// emits names the transport that produced it (#141).
-func TestCollectStampsO365ActivityTransport(t *testing.T) {
+// The collector's declared transport (read by admin and scheduler) must
+// agree with the transport on its emitted records.
+func TestActivityCollectorReportsAndStampsO365ActivityTransport(t *testing.T) {
 	base := testBase()
 	api := newFakeAPI(t, blobSpec{
 		contentType: o365activityclient.ContentExchange,
@@ -1011,17 +1012,21 @@ func TestCollectStampsO365ActivityTransport(t *testing.T) {
 	})
 
 	rc := telemetrytest.New()
-	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
+	c := newActivityCollectorForTest(t, api, o365activityclient.ContentExchange)
 
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
-		t.Fatalf("Collect: %v", err)
+	if _, err := c.CollectWindow(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
 	}
 
 	logs := rc.LogRecords()
 	if len(logs) != 1 {
 		t.Fatalf("got %d log records, want 1", len(logs))
 	}
-	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportO365Activity) {
-		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportO365Activity)
+	got := logs[0].Attrs[semconv.AttrIngestTransport]
+	if got != "o365_activity" {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, "o365_activity")
+	}
+	if declared := string(collector.TransportOf(c)); declared != got {
+		t.Errorf("declared transport = %q, emitted %q", declared, got)
 	}
 }
