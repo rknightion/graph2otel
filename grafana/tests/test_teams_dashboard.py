@@ -40,7 +40,7 @@ class TeamsDashboardTests(unittest.TestCase):
         self.assertEqual(manifest["metadata"]["name"], "graph2otel-teams")
         tabs = manifest["spec"]["layout"]["spec"]["tabs"]
         self.assertEqual([tab["spec"]["title"] for tab in tabs], [
-            "Overview", "Call quality", "Sites and network", "Calls", "Call detail", "Users",
+            "Overview", "Call quality", "Sites and network", "Network topology", "Calls", "Call detail", "Users",
             "PSTN and Direct Routing", "Auto attendant and call queue", "Phone inventory",
             "Configuration", "Usage", "Service health", "Collector health",
         ])
@@ -80,6 +80,7 @@ class TeamsDashboardTests(unittest.TestCase):
                                 "call_id": "call_id", "site": "site", "caller_site": "site", "callee_site": "site",
                                 "caller_user_principal_name": "user", "callee_user_principal_name": "user",
                                 "organizer_user_principal_name": "user", "Organiser": "user",
+                                "Caller site": "site", "Callee site": "site", "user_principal_name": "user",
                             }[field]
                             self.assertEqual(query[f"var-{variable}"], ["Sample / `?&=Site"])
                             self.assertEqual(query["var-tenant"], ["example-tenant"])
@@ -91,6 +92,7 @@ class TeamsDashboardTests(unittest.TestCase):
             ("Sites and network", "Calls", "site"), ("Calls", "Call detail", "call_id"),
             ("Users", "Call detail", "call_id"), ("Users", "Users", "user"), ("Calls", "Users", "user"),
             ("Call detail", "Call detail", "call_id"), ("Call detail", "Users", "user"),
+            ("Usage", "Users", "user"), ("Calls", "Calls", "site"),
         })
 
     def test_overview_diagnosis_links_keep_the_selected_scope(self):
@@ -219,8 +221,10 @@ class TeamsDashboardTests(unittest.TestCase):
         })
 
     def test_users_stream_search_displays_unknown_scope_without_guessing(self):
+        # The record table; the summary panels beside it aggregate the same stream.
         queries = [q["spec"]["query"]["spec"]["expr"]
-                   for panel in self.panels_by_tab()["Users"] for q in panel["data"]["spec"]["queries"]]
+                   for panel in self.panels_by_tab()["Users"] if panel["vizConfig"]["group"] == "table"
+                   for q in panel["data"]["spec"]["queries"]]
         selected = [expr for expr in queries if 'event_name=`teams.call_stream`' in expr
                     and '${user:percentencode}' in expr]
         self.assertEqual(len(selected), 1)
@@ -254,15 +258,27 @@ class TeamsDashboardTests(unittest.TestCase):
                         self.assertTrue(event.startswith("teams.") or event in {
                             "m365.service_health_issue", "m365.teams.phone_number", "m365.teams.user_configuration",
                             "m365.teams.phone_inventory_snapshot", "m365.teams.sip_device", "m365.teams_app",
+                            "m365.team", "m365.team_channel", "m365.collaboration_activity_user",
+                            "m365.service_health_post",
+                            # The one graph-profile event on this board: shown with a note that it
+                            # stays empty on a Teams-only install.
+                            "m365.service_message",
                             "graph2otel.startup"})
                         if event == "graph2otel.startup":
                             self.assertEqual(tab, "Collector health")
-                        if event == "m365.teams_app":
+                        if event in {"m365.teams_app", "m365.team", "m365.team_channel",
+                                     "m365.collaboration_activity_user"}:
                             self.assertEqual(tab, "Usage")
+                        if event == "m365.collaboration_activity_user":
+                            self.assertIn("| workload=`teams`", expr)
+                        if event in {"m365.service_health_post", "m365.service_message"}:
+                            self.assertEqual(tab, "Service health")
+                        if event == "m365.service_message":
+                            self.assertIn("Needs the graph profile", panel["description"])
+                            self.assertIn("| services=~", expr)
                         if event in {"m365.teams.phone_inventory_snapshot", "m365.teams.sip_device"}:
                             self.assertEqual(tab, "Phone inventory")
-                        if tab == "Service health":
-                            self.assertEqual(event, "m365.service_health_issue")
+                        if tab == "Service health" and event == "m365.service_health_issue":
                             self.assertIn('| service=`Microsoft Teams`', expr)
                             if panel["title"] == "Latest Teams issue observations in range":
                                 self.assertIn('| is_resolved=~`true|false`', expr)
